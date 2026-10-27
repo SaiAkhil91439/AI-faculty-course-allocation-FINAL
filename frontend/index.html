@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Faculty–Subject–Section Allocation Agent</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- SheetJS for Excel Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for Data Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- Top Navigation Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div>
+                    <h1>AI FACULTY ALLOCATION AGENT</h1>
+                    <p class="subtitle">Constraint-Based Academic Load Optimization Engine</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btnHeaderViewData" class="btn btn-secondary btn-sm" title="View & inspect faculty and course data">
+                    <i class="fa-solid fa-eye"></i> View Data
+                </button>
+                <button id="btnHeaderChat" class="btn btn-accent btn-sm" title="Ask AI Chatbot about allocations & workload">
+                    <i class="fa-solid fa-robot"></i> AI Chatbot
+                </button>
+                <button id="btnOpenWorkloadCalculator" class="btn btn-primary btn-sm" title="Open Interactive LTPC Workload Calculator">
+                    <i class="fa-solid fa-calculator"></i> LTPC Workload Calculator
+                </button>
+                <a id="btnQuickDownloadWorkloadExcel" href="/api/download/ltpc-workload.xlsx" class="btn btn-secondary btn-sm" title="Download Total Clear Load Calculation Excel">
+                    <i class="fa-solid fa-file-excel"></i> Workload Excel
+                </a>
+                <button id="btnDownloadSample" class="btn btn-secondary btn-sm" title="Download compliant template Excel files">
+                    <i class="fa-solid fa-file-arrow-down"></i> Sample Files
+                </button>
+                <button id="btnLogout" class="btn btn-secondary btn-sm" title="Sign out">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Grid Container -->
+        <main class="main-grid">
+
+            <!-- Left Panel: Configuration & File Uploads -->
+            <section class="card config-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-sliders"></i> Configuration & Inputs</h2>
+                    <span class="badge badge-info">Step 1 of 2</span>
+                </div>
+
+                <form id="allocationForm">
+                    <!-- Academic Parameters Grid -->
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="numSections">Number of Sections</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <input type="number" id="numSections" value="12" min="1" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="numSubjects">Number of Subjects</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-book-bookmark"></i>
+                                <input type="number" id="numSubjects" value="5" min="1" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sectionsPerFaculty">Sections per Faculty</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-chalkboard-user"></i>
+                                <input type="number" id="sectionsPerFaculty" value="3" min="1" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="maxSubjectsPerFaculty">Max Subjects per Faculty</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-list-check"></i>
+                                <input type="number" id="maxSubjectsPerFaculty" value="1" min="1" required>
+                            </div>
+                        </div>
+
+                        <!-- Configurable Section Limits for Deans and HODs -->
+                        <div class="form-group">
+                            <label for="deanMaxSections">Dean Max Sections</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-user-tie"></i>
+                                <input type="number" id="deanMaxSections" value="2" min="1" max="5" required title="Max sections assigned to Deans (4-6 hrs)">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="hodMaxSections">HOD Max Sections</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-user-shield"></i>
+                                <input type="number" id="hodMaxSections" value="3" min="1" max="5" required title="Max sections assigned to HODs (10-12 hrs)">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="highExpThreshold">High Exp. Threshold (Yrs)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-award"></i>
+                                <input type="number" id="highExpThreshold" value="8" min="1" max="30" step="0.5" required title="Min teaching experience in a course to trigger 2+1 section split">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Workload Target Guidelines Box -->
+                    <div class="designation-rules-card">
+                        <div class="rules-header"><i class="fa-solid fa-clock-rotate-left"></i> Workload & Experienced Faculty Rules</div>
+                        <div class="rules-grid">
+                            <span class="rule-chip dean">Dean: <strong>4–6 hrs/wk</strong></span>
+                            <span class="rule-chip hod">HOD: <strong>10–12 hrs/wk</strong></span>
+                            <span class="rule-chip assoc">Assoc. Prof: <strong>14–16 hrs/wk</strong></span>
+                            <span class="rule-chip asst">Asst. Prof: <strong>16–18 hrs/wk</strong></span>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 0.78rem; color: #64748b; line-height: 1.3;">
+                            <i class="fa-solid fa-star" style="color: #f59e0b;"></i> <strong>High-Exp Faculty Rule:</strong> Faculty with $\ge$ <span id="lblExpThreshold">8</span> yrs exp get <strong>2 sections</strong> in Course 1 (highest exp) + <strong>1 section</strong> in Course 2 (2nd highest exp).
+                        </div>
+                    </div>
+
+                    <!-- Auto-Calculated Metric Badge -->
+                    <div class="metric-box" id="metricBox">
+                        <div class="metric-icon"><i class="fa-solid fa-calculator"></i></div>
+                        <div class="metric-info">
+                            <span class="metric-label">Faculty required per subject</span>
+                            <span class="metric-value" id="calcFacultyRequired">4 faculty per subject</span>
+                            <small class="metric-subtext" id="calcFormula">Formula: 12 sections / 3 sections per faculty</small>
+                        </div>
+                        <div id="divisibilityBadge" class="divisibility-badge valid">
+                            <i class="fa-solid fa-check-circle"></i> Valid Division
+                        </div>
+                    </div>
+
+                    <!-- Configurable Weights Section -->
+                    <div class="weights-container">
+                        <div class="weights-header">
+                            <label><i class="fa-solid fa-scale-balanced"></i> Scoring Weights</label>
+                            <span id="weightsTotal" class="weights-total">Total: 100%</span>
+                        </div>
+                        <div class="weight-sliders">
+                            <div class="weight-item">
+                                <div class="weight-label"><span>Preference</span> <strong id="valPref">40%</strong></div>
+                                <input type="range" id="weightPref" min="0" max="100" value="40" class="slider">
+                            </div>
+                            <div class="weight-item">
+                                <div class="weight-label"><span>Experience</span> <strong id="valExp">30%</strong></div>
+                                <input type="range" id="weightExp" min="0" max="100" value="30" class="slider">
+                            </div>
+                            <div class="weight-item">
+                                <div class="weight-label"><span>Skill Level</span> <strong id="valSkill">20%</strong></div>
+                                <input type="range" id="weightSkill" min="0" max="100" value="20" class="slider">
+                            </div>
+                            <div class="weight-item">
+                                <div class="weight-label"><span>Qualification</span> <strong id="valQual">10%</strong></div>
+                                <input type="range" id="weightQual" min="0" max="100" value="10" class="slider">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- File Upload Section with Mode Toggle -->
+                    <div class="upload-section">
+                        <div class="upload-section-header">
+                            <div>
+                                <h3><i class="fa-solid fa-file-excel"></i> Faculty Input Data</h3>
+                                <p style="font-size: 11px; color: #94a3b8; margin: 2px 0 0 0;">Upload your institution's Excel files or use compliant samples</p>
+                            </div>
+                            <div class="upload-mode-toggle">
+                                <button type="button" class="mode-toggle-btn active" id="btnModeCombined" title="Upload a single sheet with preferences, experience & roles">Single File</button>
+                                <button type="button" class="mode-toggle-btn" id="btnModeSplit" title="Upload separate Preferences and Experience files">Separate Files</button>
+                            </div>
+                        </div>
+
+                        <!-- Combined Mode: Single Excel File Container -->
+                        <div id="containerModeCombined">
+                            <div class="dropzone dropzone-primary" id="dropzoneFaculty">
+                                <input type="file" id="fileFaculty" accept=".xlsx, .xls" hidden>
+                                <div class="dropzone-content">
+                                    <i class="fa-solid fa-cloud-arrow-up drop-icon" style="color: #6366f1; font-size: 28px;"></i>
+                                    <div class="drop-text">
+                                        <strong style="color: #f8fafc; font-size: 14px;">Combined Faculty Input Excel</strong>
+                                        <span>Drag & drop or <button type="button" class="btn btn-xs btn-outline-primary" style="margin-left: 4px; pointer-events: auto;" onclick="document.getElementById('fileFaculty').click();">Browse File</button></span>
+                                        <div class="file-status-row">
+                                            <small id="nameFaculty" class="file-name" style="color: #38bdf8; font-weight: 500;">Default: faculty_sample_combined.xlsx</small>
+                                            <button type="button" class="btn-dz-view" id="btnViewFacultyFile" title="View loaded faculty data"><i class="fa-solid fa-eye"></i> View</button>
+                                            <button type="button" class="btn-dz-clear hidden" id="btnClearFacultyFile" title="Reset to default sample"><i class="fa-solid fa-xmark"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Separate Mode: Dual Excel Files Container -->
+                        <div id="containerModeSplit" class="hidden">
+                            <!-- Preferences File Dropzone -->
+                            <div class="dropzone" id="dropzonePref" style="margin-bottom: 8px;">
+                                <input type="file" id="filePref" accept=".xlsx, .xls" hidden>
+                                <div class="dropzone-content">
+                                    <i class="fa-solid fa-list-ol drop-icon" style="color: #38bdf8; font-size: 22px;"></i>
+                                    <div class="drop-text">
+                                        <strong style="font-size: 13px;">1. Faculty Preferences Excel</strong>
+                                        <span>Drag & drop or <button type="button" class="btn btn-xs btn-outline-primary" onclick="document.getElementById('filePref').click();">Browse</button></span>
+                                        <div class="file-status-row">
+                                            <small id="namePref" class="file-name" style="color: #38bdf8;">Default: faculty_preferences.xlsx</small>
+                                            <button type="button" class="btn-dz-clear hidden" id="btnClearPrefFile" title="Reset"><i class="fa-solid fa-xmark"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Experience File Dropzone -->
+                            <div class="dropzone" id="dropzoneExp">
+                                <input type="file" id="fileExp" accept=".xlsx, .xls" hidden>
+                                <div class="dropzone-content">
+                                    <i class="fa-solid fa-award drop-icon" style="color: #10b981; font-size: 22px;"></i>
+                                    <div class="drop-text">
+                                        <strong style="font-size: 13px;">2. Faculty Experience & Roles Excel</strong>
+                                        <span>Drag & drop or <button type="button" class="btn btn-xs btn-outline-primary" onclick="document.getElementById('fileExp').click();">Browse</button></span>
+                                        <div class="file-status-row">
+                                            <small id="nameExp" class="file-name" style="color: #10b981;">Default: faculty_experience.xlsx</small>
+                                            <button type="button" class="btn-dz-clear hidden" id="btnClearExpFile" title="Reset"><i class="fa-solid fa-xmark"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Course Curriculum Structure Dropzone (Optional) -->
+                        <div class="dropzone dropzone-optional" id="dropzoneCourse" style="margin-top: 8px;">
+                            <input type="file" id="fileCourse" accept=".xlsx, .xls" hidden>
+                            <div class="dropzone-content">
+                                <i class="fa-solid fa-book-bookmark drop-icon" style="color: #f59e0b; font-size: 22px;"></i>
+                                <div class="drop-text">
+                                    <strong style="font-size: 13px;">Course Curriculum (L-T-P-C) <small style="color: #94a3b8; font-weight: normal;">(Optional)</small></strong>
+                                    <span>Drag & drop or <button type="button" class="btn btn-xs btn-outline-primary" onclick="document.getElementById('fileCourse').click();">Browse</button></span>
+                                    <div class="file-status-row">
+                                        <small id="nameCourse" class="file-name" style="color: #64748b;">Default: course_details.xlsx</small>
+                                        <button type="button" class="btn-dz-view" id="btnViewCourseFile" title="View loaded curriculum"><i class="fa-solid fa-eye"></i> View</button>
+                                        <button type="button" class="btn-dz-clear hidden" id="btnClearCourseFile" title="Reset"><i class="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="btn-group">
+                        <button type="button" id="btnPreviewExcel" class="btn btn-accent btn-block" title="Inspect loaded faculty roster, preferences, and course contact hours">
+                            <i class="fa-solid fa-eye"></i> VIEW DATA & PREVIEW
+                        </button>
+                        <button type="button" id="btnQuickCalcWorkload" class="btn btn-secondary btn-block" title="Calculate department workload directly using LTPC structure">
+                            <i class="fa-solid fa-calculator"></i> CALCULATE LTPC WORKLOAD
+                        </button>
+                        <button type="button" id="btnValidate" class="btn btn-secondary btn-block" title="Verify all constraints, designation rules, and inputs">
+                            <i class="fa-solid fa-vial-circle-check"></i> VALIDATE DATA
+                        </button>
+                        <button type="submit" id="btnGenerate" class="btn btn-primary btn-block" title="Compute optimal course allocations using Google OR-Tools CP-SAT">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> GENERATE ALLOCATION
+                        </button>
+                    </div>
+
+                </form>
+            </section>
+
+            <!-- Right Panel: Results & AI Agent Dashboard -->
+            <section class="card results-card" id="resultsSection">
+                
+                <!-- Initial Empty State -->
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-icon"><i class="fa-solid fa-diagram-project"></i></div>
+                    <h3>Ready for Allocation</h3>
+                    <p>Configure parameters or upload custom Excel files on the left, then click <strong>GENERATE ALLOCATION</strong> to compute optimal assignments using Google OR-Tools.</p>
+                </div>
+
+                <!-- Loading Spinner State -->
+                <div class="loading-state hidden" id="loadingState">
+                    <div class="spinner"></div>
+                    <h3 id="loadingTitle">Running Optimization Engine...</h3>
+                    <p id="loadingMessage">Evaluating constraints, calculating compatibility scores, and solving OR-Tools Integer Linear Program.</p>
+                </div>
+
+                <!-- Error Alert Box -->
+                <div class="error-box hidden" id="errorBox">
+                    <div class="error-header">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <h4 id="errorTitle">Allocation Failed</h4>
+                    </div>
+                    <p id="errorMessage" class="error-msg"></p>
+                    <ul id="errorDetails" class="error-list"></ul>
+                </div>
+
+                <!-- Success Output Container -->
+                <div class="results-content hidden" id="resultsContent">
+                    
+                    <!-- Banner Summary Card -->
+                    <div class="success-banner" id="resultsSuccessBanner">
+                        <div class="banner-left">
+                            <div class="success-badge"><i class="fa-solid fa-circle-check"></i> Allocation Completed Successfully!</div>
+                            <div class="banner-metrics">
+                                <div class="b-metric"><span>Sections</span> <strong id="resSections">12</strong></div>
+                                <div class="b-metric"><span>Subjects</span> <strong id="resSubjects">5</strong></div>
+                                <div class="b-metric"><span>Faculty Req/Subject</span> <strong id="resFacReq">4</strong></div>
+                                <div class="b-metric highlight"><span>Average Score</span> <strong id="resAvgScore">91.5 / 100</strong></div>
+                            </div>
+                        </div>
+                        <div class="banner-right">
+                            <a id="btnDownloadExcel" href="/api/download/faculty_allocation.xlsx" class="btn btn-success btn-lg">
+                                <i class="fa-solid fa-download"></i> DOWNLOAD EXCEL
+                            </a>
+                            <button type="button" id="btnBannerViewCharts" class="btn btn-primary btn-lg" style="margin-top: 8px;">
+                                <i class="fa-solid fa-chart-pie"></i> VIEW CHARTS & ANALYTICS
+                            </button>
+                            <a id="btnDownloadWorkloadExcelBanner" href="/api/download/ltpc-workload.xlsx" class="btn btn-secondary btn-sm" style="margin-top: 6px;">
+                                <i class="fa-solid fa-file-excel"></i> Workload Calculation Excel
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Tabs -->
+                    <div class="tabs-header">
+                        <button class="tab-btn active" data-tab="tabMatrix"><i class="fa-solid fa-table-cells"></i> Final Allocation Matrix</button>
+                        <button class="tab-btn" data-tab="tabWorkload"><i class="fa-solid fa-calculator"></i> LTPC Workload & Dept Analysis</button>
+                        <button class="tab-btn" data-tab="tabAnalytics"><i class="fa-solid fa-chart-pie"></i> Visual Analytics & Charts</button>
+                        <button class="tab-btn" data-tab="tabFaculty"><i class="fa-solid fa-user-group"></i> Faculty Detail View</button>
+                        <button class="tab-btn" data-tab="tabAgent"><i class="fa-solid fa-robot"></i> AI Agent Explanation</button>
+                        <button class="tab-btn" data-tab="tabTrace"><i class="fa-solid fa-list-check"></i> Execution Steps</button>
+                    </div>
+
+                    <!-- Tab Panes -->
+                    <div class="tab-content">
+                        <!-- Tab 1: Final Allocation Matrix -->
+                        <div class="tab-pane active" id="tabMatrix">
+                            <div class="table-wrapper" id="matrixTableContainer">
+                                <!-- Dynamic Table Inserted by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: LTPC Workload Analysis & Department Demand -->
+                        <div class="tab-pane" id="tabWorkload">
+                            <div class="workload-dashboard-container">
+                                <!-- Top Banner & Quick Controls -->
+                                <div class="workload-header-card">
+                                    <div class="workload-header-left">
+                                        <div class="workload-badge-pulse"><i class="fa-solid fa-bolt"></i> Institutional Formula Engine</div>
+                                        <h2>LTPC Faculty Workload & Department Demand Analysis</h2>
+                                        <p class="workload-desc">
+                                            Calculated based on standard L-T-P-C structure:
+                                            <strong>1 Faculty</strong> for each course is allotted to a section for the Lecture (L) hour, <strong>3 Faculty</strong> are allotted to Tutorial (T) hours, and <strong>3 Faculty</strong> are allotted to Practical (P) hours per section.
+                                        </p>
+                                    </div>
+                                    <div class="workload-header-actions">
+                                        <a href="/api/download/ltpc-workload.xlsx" id="btnDownloadWorkloadExcelTab" class="btn btn-success btn-md">
+                                            <i class="fa-solid fa-file-excel"></i> Download Workload Excel
+                                        </a>
+                                        <button type="button" id="btnResetToPromptCourses" class="btn btn-secondary btn-sm" title="Load exact 7 courses from the prompt">
+                                            <i class="fa-solid fa-rotate-left"></i> Load Prompt Example (7 Courses)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Formula Explainer Cards -->
+                                <div class="formula-showcase-grid">
+                                    <div class="formula-card section-formula">
+                                        <div class="formula-card-header">
+                                            <i class="fa-solid fa-square-root-variable"></i>
+                                            <span>Formula for 1 Section Workload</span>
+                                        </div>
+                                        <div class="formula-equation" id="displayFormulaSection">
+                                            13 × 1 <small>(L hrs × 1 fac)</small> + 8 × 3 <small>(T hrs × 3 fac)</small> + 12 × 3 <small>(P hrs × 3 fac)</small> = <strong class="glow-accent">73 hrs</strong>
+                                        </div>
+                                        <div class="formula-subtext">Sum of contact hours across all courses multiplied by assigned faculty per hour</div>
+                                    </div>
+
+                                    <div class="formula-card dept-formula">
+                                        <div class="formula-card-header">
+                                            <i class="fa-solid fa-building-columns"></i>
+                                            <span>Formula for Department Workload (<span id="displayNumSectionsLabel">12</span> Sections)</span>
+                                        </div>
+                                        <div class="formula-equation" id="displayFormulaDept">
+                                            13×1×12 + 8×3×12 + 12×3×12 = 156 + 288 + 432 = <strong class="glow-green">876 hrs</strong>
+                                        </div>
+                                        <div class="formula-subtext">Total department contact demand delivered across all academic sections</div>
+                                    </div>
+                                </div>
+
+                                <!-- Workload Efficiency & Optimization Panel -->
+                                <div class="workload-efficiency-panel">
+                                    <div class="eff-panel-header">
+                                        <div class="eff-panel-title">
+                                            <i class="fa-solid fa-gauge-high"></i>
+                                            <div>
+                                                <h3>Faculty Workload Efficiency & Capacity Utilization</h3>
+                                                <span class="eff-sub">Real-time staffing balance, load capacity ratios, and optimization models</span>
+                                            </div>
+                                        </div>
+                                        <div class="eff-status-pill status-danger" id="effStatusPill">
+                                            <span class="eff-dot"></span>
+                                            <span id="effStatusText">High Contact Demand</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Efficiency KPI Cards -->
+                                    <div class="eff-kpi-grid">
+                                        <div class="eff-card">
+                                            <div class="eff-card-icon"><i class="fa-solid fa-bolt"></i></div>
+                                            <div class="eff-card-content">
+                                                <span class="eff-label">Workload Efficiency Score</span>
+                                                <div class="eff-val-row">
+                                                    <strong class="eff-val glow-accent" id="effScoreVal">71.3%</strong>
+                                                    <span class="badge badge-warning" id="effScoreBadge">High Demand</span>
+                                                </div>
+                                                <div class="eff-bar-bg">
+                                                    <div class="eff-bar-fill" id="effScoreBar" style="width: 71.3%;"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="eff-card">
+                                            <div class="eff-card-icon"><i class="fa-solid fa-battery-half"></i></div>
+                                            <div class="eff-card-content">
+                                                <span class="eff-label">Department Capacity Utilization</span>
+                                                <div class="eff-val-row">
+                                                    <strong class="eff-val glow-green" id="effUtilVal">171.8%</strong>
+                                                    <small id="effUtilDetails">510h avail vs 876h need</small>
+                                                </div>
+                                                <div class="eff-bar-bg">
+                                                    <div class="eff-bar-fill fill-warn" id="effUtilBar" style="width: 100%;"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="eff-card">
+                                            <div class="eff-card-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
+                                            <div class="eff-card-content">
+                                                <span class="eff-label">Faculty Staffing Balance</span>
+                                                <div class="eff-val-row">
+                                                    <strong class="eff-val" id="effBalanceVal">-24.4 Faculty</strong>
+                                                    <small id="effBalanceSub">Need 58.4 / Have 34</small>
+                                                </div>
+                                                <span class="eff-delta-tag" id="effDeltaTag">Staffing Deficit Detected</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="eff-card">
+                                            <div class="eff-card-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                                            <div class="eff-card-content">
+                                                <span class="eff-label">Theory vs Lab/Tutorial Ratio</span>
+                                                <div class="eff-val-row">
+                                                    <strong class="eff-val" id="effRatioVal">0.65 : 1</strong>
+                                                    <small id="effRatioDetails">13 L vs 20 T+P Contact Hrs</small>
+                                                </div>
+                                                <span class="eff-ratio-sub">Balanced Practical Engagement</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Comparative Staffing Optimization Models (Scenarios) -->
+                                    <div class="scenarios-container">
+                                        <div class="scenarios-header">
+                                            <h4><i class="fa-solid fa-sliders"></i> Staffing Efficiency Optimization Models (Click to Apply Instantly)</h4>
+                                            <span class="scenarios-sub">Explore how batch size & multiplier adjustments save faculty contact hours</span>
+                                        </div>
+                                        <div class="scenarios-grid" id="scenariosGrid">
+                                            <!-- Populated dynamically by JS -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Interactive Parameter Adjuster Bar -->
+                                <div class="workload-adjuster-bar">
+                                    <div class="adjuster-item">
+                                        <label for="wlInputSections"><i class="fa-solid fa-layer-group"></i> Sections (N): <strong id="lblValSections">12</strong></label>
+                                        <input type="range" id="wlSliderSections" min="1" max="24" value="12" class="slider-sm">
+                                        <input type="number" id="wlInputSections" value="12" min="1" max="50" style="display:none;">
+                                    </div>
+                                    <div class="adjuster-item">
+                                        <label for="wlInputLFac"><i class="fa-solid fa-chalkboard-user"></i> L Faculty: <strong id="lblValLFac">1</strong></label>
+                                        <input type="range" id="wlSliderLFac" min="1" max="5" value="1" class="slider-sm">
+                                        <input type="number" id="wlInputLFac" value="1" min="1" max="10" style="display:none;">
+                                    </div>
+                                    <div class="adjuster-item">
+                                        <label for="wlInputTFac"><i class="fa-solid fa-users"></i> T Faculty: <strong id="lblValTFac">3</strong></label>
+                                        <input type="range" id="wlSliderTFac" min="1" max="5" value="3" class="slider-sm">
+                                        <input type="number" id="wlInputTFac" value="3" min="1" max="10" style="display:none;">
+                                    </div>
+                                    <div class="adjuster-item">
+                                        <label for="wlInputPFac"><i class="fa-solid fa-flask-vial"></i> P Faculty: <strong id="lblValPFac">3</strong></label>
+                                        <input type="range" id="wlSliderPFac" min="1" max="5" value="3" class="slider-sm">
+                                        <input type="number" id="wlInputPFac" value="3" min="1" max="10" style="display:none;">
+                                    </div>
+                                    <div class="adjuster-item">
+                                        <label for="wlInputAvailFaculty"><i class="fa-solid fa-user-group"></i> Available Dept Faculty: <strong id="lblValAvailFac">34</strong></label>
+                                        <input type="range" id="wlSliderAvailFaculty" min="10" max="80" value="34" class="slider-sm">
+                                        <input type="number" id="wlInputAvailFaculty" value="34" min="1" max="150" style="display:none;">
+                                    </div>
+                                    <div class="adjuster-item">
+                                        <label for="wlInputFacultyCap"><i class="fa-solid fa-clock"></i> Cap (hrs/fac): <strong id="lblValCap">15h</strong></label>
+                                        <input type="range" id="wlSliderFacultyCap" min="10" max="25" value="15" class="slider-sm">
+                                        <input type="number" id="wlInputFacultyCap" value="15" min="1" max="30" style="display:none;">
+                                    </div>
+                                    <div class="adjuster-actions">
+                                        <button type="button" id="btnPresetBaseline" class="btn btn-secondary btn-xs active-preset" title="Baseline 1-3-3">1-3-3</button>
+                                        <button type="button" id="btnPresetDualBatch" class="btn btn-secondary btn-xs" title="Dual Batch 1-2-2">1-2-2</button>
+                                        <button type="button" id="btnPresetBlended" class="btn btn-secondary btn-xs" title="Blended 1-1-2">1-1-2</button>
+                                        <button type="button" id="btnPresetAICTE" class="btn btn-secondary btn-xs" title="AICTE 1-1-1">1-1-1</button>
+                                    </div>
+                                </div>
+
+                                <!-- Metric KPI Cards Grid -->
+                                <div class="kpi-grid-7">
+                                    <div class="kpi-card kpi-l">
+                                        <div class="kpi-icon"><i class="fa-solid fa-chalkboard"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Total Lecture (L) Hours</span>
+                                            <strong class="kpi-value" id="wlTotalL">13 hrs</strong>
+                                            <span class="kpi-dept-sub" id="wlDeptL">Dept Load: 156 faculty-hrs</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="kpi-card kpi-t">
+                                        <div class="kpi-icon"><i class="fa-solid fa-people-arrows"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Total Tutorial (T) Hours</span>
+                                            <strong class="kpi-value" id="wlTotalT">8 hrs</strong>
+                                            <span class="kpi-dept-sub" id="wlDeptT">Dept Load: 288 faculty-hrs</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="kpi-card kpi-p">
+                                        <div class="kpi-icon"><i class="fa-solid fa-flask"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Total Practical (P) Hours</span>
+                                            <strong class="kpi-value" id="wlTotalP">12 hrs</strong>
+                                            <span class="kpi-dept-sub" id="wlDeptP">Dept Load: 432 faculty-hrs</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="kpi-card kpi-c">
+                                        <div class="kpi-icon"><i class="fa-solid fa-award"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Total Credits (C)</span>
+                                            <strong class="kpi-value" id="wlTotalC">23 Credits</strong>
+                                            <span class="kpi-dept-sub" id="wlTotalCoursesCount">Across 7 courses</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="kpi-card kpi-section">
+                                        <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Section Workload</span>
+                                            <strong class="kpi-value" id="wlSectionTotal">73 hrs</strong>
+                                            <span class="kpi-dept-sub">per section / week</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="kpi-card kpi-hero">
+                                        <div class="kpi-icon"><i class="fa-solid fa-bolt-lightning"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Total Department Workload</span>
+                                            <strong class="kpi-value glow-text" id="wlDeptTotal">876 hrs</strong>
+                                            <span class="kpi-dept-sub">faculty-hours / week</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="kpi-card kpi-faculty-req">
+                                        <div class="kpi-icon"><i class="fa-solid fa-user-check"></i></div>
+                                        <div class="kpi-data">
+                                            <span class="kpi-title">Faculty Required</span>
+                                            <strong class="kpi-value" id="wlEstimatedFaculty">~58 Faculty</strong>
+                                            <span class="kpi-dept-sub">@ 15 hrs standard workload</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Visual Charts Grid -->
+                                <div class="workload-charts-grid">
+                                    <div class="chart-card">
+                                        <div class="chart-card-header">
+                                            <h3><i class="fa-solid fa-chart-pie"></i> L-T-P Workload Share</h3>
+                                            <span class="badge badge-info">% of Department Load</span>
+                                        </div>
+                                        <div class="chart-card-body">
+                                            <canvas id="chartWorkloadShare"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <div class="chart-card">
+                                        <div class="chart-card-header">
+                                            <h3><i class="fa-solid fa-chart-column"></i> Course-wise L-T-P Load</h3>
+                                            <span class="badge badge-info">Faculty-Hours / Section</span>
+                                        </div>
+                                        <div class="chart-card-body">
+                                            <canvas id="chartCourseStackedLoad"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <div class="chart-card chart-full-width">
+                                        <div class="chart-card-header">
+                                            <h3><i class="fa-solid fa-chart-area"></i> Section Workload Distribution</h3>
+                                            <span class="badge badge-info">Per Section vs Cumulative Load</span>
+                                        </div>
+                                        <div class="chart-card-body">
+                                            <canvas id="chartSectionLoadDistribution"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Course-by-Course Table -->
+                                <div class="workload-table-section">
+                                    <div class="section-title-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                        <div>
+                                            <h3><i class="fa-solid fa-table-list"></i> Course-wise LTPC Workload Breakdown</h3>
+                                            <span class="badge badge-info"><i class="fa-solid fa-pen-to-square"></i> Inline Editable Table • Real-Time Recalculation</span>
+                                        </div>
+                                        <div class="table-action-btns" style="display: flex; gap: 8px;">
+                                            <button type="button" id="btnWlAddCourse" class="btn btn-secondary btn-sm" title="Add new course row">
+                                                <i class="fa-solid fa-plus"></i> Add Course
+                                            </button>
+                                            <button type="button" id="btnWlResetPrompt" class="btn btn-secondary btn-sm" title="Reset to prompt 7 courses">
+                                                <i class="fa-solid fa-rotate-left"></i> Reset Prompt Courses
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="table-wrapper" id="workloadCourseTableContainer">
+                                        <!-- Course table populated by JS with editable input cells -->
+                                    </div>
+                                </div>
+
+                                <!-- Section-by-Section Matrix Table -->
+                                <div class="workload-table-section">
+                                    <div class="section-title-bar">
+                                        <h3><i class="fa-solid fa-network-wired"></i> Section Load Breakdown Matrix</h3>
+                                        <span class="badge badge-info">Section A through <span id="lblLastSection">L</span></span>
+                                    </div>
+                                    <div class="table-wrapper" id="workloadSectionTableContainer">
+                                        <!-- Section table populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Visual Analytics & Charts -->
+                        <div class="tab-pane" id="tabAnalytics">
+                            <!-- Visual Analytics Summary KPI Strip -->
+                            <div class="analytics-kpi-strip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                                <div class="eff-card" style="padding: 12px 16px;">
+                                    <div class="eff-card-icon" style="color: #38bdf8; background: rgba(56, 189, 248, 0.12);"><i class="fa-solid fa-users"></i></div>
+                                    <div class="eff-card-content">
+                                        <span class="eff-label">Allocated Faculty</span>
+                                        <strong class="eff-val" id="analyticsAllocFacultyCount">-</strong>
+                                        <small style="color: #94a3b8;" id="analyticsAllocFacultySub">Assigned across sections</small>
+                                    </div>
+                                </div>
+                                <div class="eff-card" style="padding: 12px 16px;">
+                                    <div class="eff-card-icon" style="color: #10b981; background: rgba(16, 185, 129, 0.12);"><i class="fa-solid fa-bullseye"></i></div>
+                                    <div class="eff-card-content">
+                                        <span class="eff-label">Pref Rank 1 Satisfaction</span>
+                                        <strong class="eff-val glow-green" id="analyticsRank1Pct">-</strong>
+                                        <small style="color: #94a3b8;" id="analyticsRank1Sub">Top subject choice match</small>
+                                    </div>
+                                </div>
+                                <div class="eff-card" style="padding: 12px 16px;">
+                                    <div class="eff-card-icon" style="color: #f59e0b; background: rgba(245, 158, 11, 0.12);"><i class="fa-solid fa-star"></i></div>
+                                    <div class="eff-card-content">
+                                        <span class="eff-label">High-Exp 2+1 Splits</span>
+                                        <strong class="eff-val" style="color: #fbbf24;" id="analyticsHighExpCount">-</strong>
+                                        <small style="color: #94a3b8;">Experienced course mentorship</small>
+                                    </div>
+                                </div>
+                                <div class="eff-card" style="padding: 12px 16px;">
+                                    <div class="eff-card-icon" style="color: #818cf8; background: rgba(129, 140, 248, 0.12);"><i class="fa-solid fa-chart-line"></i></div>
+                                    <div class="eff-card-content">
+                                        <span class="eff-label">Average Fit Score</span>
+                                        <strong class="eff-val glow-accent" id="analyticsAvgScoreVal">-</strong>
+                                        <small style="color: #94a3b8;">Out of 100 max score</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="charts-grid">
+                                <div class="chart-card">
+                                    <div class="chart-card-header">
+                                        <h3><i class="fa-solid fa-chart-bar"></i> Faculty Load Distribution</h3>
+                                        <span class="badge badge-info">Assigned Sections</span>
+                                    </div>
+                                    <div class="chart-card-body">
+                                        <canvas id="chartFacultyLoad"></canvas>
+                                    </div>
+                                </div>
+
+                                <div class="chart-card">
+                                    <div class="chart-card-header">
+                                        <h3><i class="fa-solid fa-pie-chart"></i> Preference Satisfaction</h3>
+                                        <span class="badge badge-info">Faculty Preference Ranks</span>
+                                    </div>
+                                    <div class="chart-card-body">
+                                        <canvas id="chartPreferenceSat"></canvas>
+                                    </div>
+                                </div>
+
+                                <div class="chart-card chart-full-width">
+                                    <div class="chart-card-header">
+                                        <h3><i class="fa-solid fa-user-clock"></i> Designation Workload Breakdown</h3>
+                                        <span class="badge badge-info">Assigned Hours vs Designation Institutional Policy</span>
+                                    </div>
+                                    <div class="chart-card-body">
+                                        <canvas id="chartRoleWorkload"></canvas>
+                                    </div>
+                                </div>
+
+                                <div class="chart-card chart-full-width">
+                                    <div class="chart-card-header">
+                                        <h3><i class="fa-solid fa-book-open-reader"></i> Subject Allocation & Faculty Coverage</h3>
+                                        <span class="badge badge-info">Faculty & Sections per Subject</span>
+                                    </div>
+                                    <div class="chart-card-body">
+                                        <canvas id="chartSubjectCoverage"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 3: Faculty Detail View -->
+                        <div class="tab-pane" id="tabFaculty">
+                            <div class="table-wrapper" id="facultyTableContainer">
+                                <!-- Dynamic Table Inserted by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Tab 4: AI Agent Explanation & Live Interactive Assistant -->
+                        <div class="tab-pane" id="tabAgent">
+                            <div class="ai-agent-layout" style="display: flex; flex-direction: column; gap: 20px;">
+                                <div class="ai-explanation-box" id="aiExplanationContent">
+                                    <!-- Rendered Markdown / Text -->
+                                </div>
+
+                                <!-- In-Page Interactive Allocation AI Chat Assistant -->
+                                <div class="inpage-chat-card" style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 18px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <i class="fa-solid fa-brain" style="color: #38bdf8; font-size: 22px;"></i>
+                                            <div>
+                                                <h3 style="font-size: 16px; margin: 0; color: #f8fafc;">Allocation AI Chatbot Assistant</h3>
+                                                <span style="font-size: 12px; color: #94a3b8;">Ask questions about particular faculty allocations, workload patterns, or section timetables</span>
+                                            </div>
+                                        </div>
+                                        <span class="badge badge-success"><i class="fa-solid fa-bolt"></i> Live Assistant Ready</span>
+                                    </div>
+
+                                    <!-- In-Page Chat Suggestions -->
+                                    <div class="chat-suggestions inpage-suggestions" id="inpageChatSuggestions" style="padding: 0 0 10px 0; background: transparent; border: none; display: flex; flex-wrap: wrap; gap: 6px;">
+                                        <button class="chip-btn" data-query="What is the workload pattern across designations?"><i class="fa-solid fa-chart-line"></i> Workload Pattern by Role</button>
+                                        <button class="chip-btn" data-query="Tell details of Dr. Rajesh Kumar allocation"><i class="fa-solid fa-user"></i> Particular Faculty Details</button>
+                                        <button class="chip-btn" data-query="Details of Machine Learning course allocation"><i class="fa-solid fa-book"></i> Course Allocation Details</button>
+                                        <button class="chip-btn" data-query="Show timetable for Section A"><i class="fa-solid fa-layer-group"></i> Section A Timetable</button>
+                                        <button class="chip-btn" data-query="Show faculty teaching > 15 hours/week"><i class="fa-solid fa-clock"></i> Hours > 15 hrs/wk</button>
+                                    </div>
+
+                                    <!-- In-Page Chat Messages Display -->
+                                    <div class="inpage-chat-messages" id="inpageChatBody" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px; background: rgba(10, 15, 29, 0.6); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 12px;">
+                                        <div class="chat-message assistant-msg">
+                                            <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+                                            <div class="msg-bubble">
+                                                Hello! 👋 I am your Allocation AI Assistant. Ask me details about any <strong>particular faculty member</strong>, <strong>course allocation</strong>, <strong>section timetable</strong>, or <strong>workload pattern</strong>!
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- In-Page Chat Input -->
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="text" id="inpageChatInput" placeholder="Ask about particular faculty, course, section, or workload pattern..." style="flex: 1; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--card-border); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 13.5px; outline: none;">
+                                        <button type="button" id="inpageChatSendBtn" class="btn btn-primary btn-md" style="padding: 0 20px;">
+                                            <i class="fa-solid fa-paper-plane"></i> Ask Assistant
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 5: Execution Trace -->
+                        <div class="tab-pane" id="tabTrace">
+                            <div class="trace-timeline" id="traceTimeline">
+                                <!-- Trace steps -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Interactive LTPC Workload Calculator Modal -->
+    <div class="modal-overlay hidden" id="workloadCalculatorModal">
+        <div class="modal-card modal-xl">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-calculator"></i>
+                    <div>
+                        <h3>Interactive LTPC Faculty Workload Calculator</h3>
+                        <p class="modal-subtitle">Live formula calculation for single section & full department load</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" id="modalCloseWorkloadBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal Formula Bar -->
+                <div class="modal-formula-bar">
+                    <div class="m-formula-badge">
+                        <i class="fa-solid fa-calculator"></i> <strong>Section Formula:</strong> <span id="mFormulaSec">13*1 + 8*3 + 12*3 = 73 hrs</span>
+                    </div>
+                    <div class="m-formula-badge accent">
+                        <i class="fa-solid fa-building-columns"></i> <strong>Dept Formula:</strong> <span id="mFormulaDept">73 × 12 = 876 hrs</span>
+                    </div>
+                </div>
+
+                <!-- Parameters Controls -->
+                <div class="modal-controls-row">
+                    <div class="m-ctrl-item">
+                        <label for="mInputSections"><i class="fa-solid fa-layer-group"></i> Sections (N):</label>
+                        <input type="number" id="mInputSections" value="12" min="1" max="50">
+                    </div>
+                    <div class="m-ctrl-item">
+                        <label for="mInputLFac"><i class="fa-solid fa-chalkboard-user"></i> L Faculty:</label>
+                        <input type="number" id="mInputLFac" value="1" min="1" max="10">
+                    </div>
+                    <div class="m-ctrl-item">
+                        <label for="mInputTFac"><i class="fa-solid fa-users"></i> T Faculty:</label>
+                        <input type="number" id="mInputTFac" value="3" min="1" max="10">
+                    </div>
+                    <div class="m-ctrl-item">
+                        <label for="mInputPFac"><i class="fa-solid fa-flask-vial"></i> P Faculty:</label>
+                        <input type="number" id="mInputPFac" value="3" min="1" max="10">
+                    </div>
+                    <div class="m-ctrl-actions">
+                        <button type="button" id="mBtnAddCourse" class="btn btn-secondary btn-sm">
+                            <i class="fa-solid fa-plus"></i> Add Course
+                        </button>
+                        <button type="button" id="mBtnResetCourses" class="btn btn-secondary btn-sm">
+                            <i class="fa-solid fa-rotate-left"></i> Reset Prompt Courses
+                        </button>
+                        <button type="button" id="mBtnDownloadExcel" class="btn btn-success btn-sm">
+                            <i class="fa-solid fa-file-excel"></i> Download Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live KPI Strip in Modal -->
+                <div class="modal-kpi-strip">
+                    <div class="m-kpi"><span class="m-label">Total L:</span> <strong id="mKpiL">13h (156h dept)</strong></div>
+                    <div class="m-kpi"><span class="m-label">Total T:</span> <strong id="mKpiT">8h (288h dept)</strong></div>
+                    <div class="m-kpi"><span class="m-label">Total P:</span> <strong id="mKpiP">12h (432h dept)</strong></div>
+                    <div class="m-kpi highlight"><span class="m-label">Section Workload:</span> <strong id="mKpiSec">73 hrs/sec</strong></div>
+                    <div class="m-kpi hero"><span class="m-label">Dept Workload:</span> <strong id="mKpiDept">876 hrs</strong></div>
+                    <div class="m-kpi success"><span class="m-label">Faculty Needed:</span> <strong id="mKpiFac">~58 Faculty</strong></div>
+                </div>
+
+                <!-- Editable Courses Table -->
+                <div class="table-wrapper modal-table-scroll">
+                    <table id="modalCoursesTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Course Title</th>
+                                <th style="width: 70px;">L</th>
+                                <th style="width: 70px;">T</th>
+                                <th style="width: 70px;">P</th>
+                                <th style="width: 70px;">C</th>
+                                <th>Section Load</th>
+                                <th>Dept Load</th>
+                                <th style="width: 60px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalCoursesTbody">
+                            <!-- Populated dynamically by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid var(--card-border); background: rgba(15, 23, 42, 0.6);">
+                <div style="font-size: 0.85rem; color: #94a3b8;">
+                    <i class="fa-solid fa-circle-info" style="color: #38bdf8;"></i> Total Workload = (L × 1) + (T × 3) + (P × 3) per section; multiplied by N sections for department.
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" id="mBtnCloseFooter" class="btn btn-secondary btn-sm">Close</button>
+                    <button type="button" id="mBtnApplyToAllocation" class="btn btn-primary btn-sm">
+                        <i class="fa-solid fa-check"></i> Apply & View Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Excel Data Preview Modal -->
+    <div class="modal-overlay hidden" id="previewModal">
+        <div class="modal-card modal-xl">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fa-solid fa-table-list"></i>
+                    <div>
+                        <h3>Data Explorer & Curriculum Preview</h3>
+                        <p style="font-size: 11.5px; color: #94a3b8; margin: 0;">Interactive view of faculty roster, teaching experience, and course contact hours</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" id="modalCloseBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-tabs">
+                    <div class="preview-tab-btn-group">
+                        <button class="preview-tab-btn active" data-preview="previewFaculty"><i class="fa-solid fa-user-group"></i> Faculty Roster & Preferences</button>
+                        <button class="preview-tab-btn" data-preview="previewCourse"><i class="fa-solid fa-book-bookmark"></i> Course Curriculum (L-T-P-C)</button>
+                        <button class="preview-tab-btn" data-preview="previewCharts"><i class="fa-solid fa-chart-pie"></i> Visual Charts & Insights</button>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex: 1; justify-content: flex-end;">
+                        <select id="previewRoleFilter" class="preview-role-filter" style="background: rgba(30, 41, 59, 0.8); border: 1px solid var(--card-border); color: #cbd5e1; padding: 7px 12px; border-radius: 8px; font-size: 12px; outline: none; cursor: pointer;">
+                            <option value="">All Designations</option>
+                            <option value="Dean">Dean</option>
+                            <option value="HOD">HOD</option>
+                            <option value="Associate Professor">Associate Professor</option>
+                            <option value="Assistant Professor">Assistant Professor</option>
+                            <option value="Professor">Professor</option>
+                        </select>
+                        <input type="text" id="previewSearchInput" class="preview-search-input" placeholder="🔍 Search faculty, course or role..." style="max-width: 260px;">
+                    </div>
+                </div>
+
+                <div class="preview-stats-bar" id="previewStatsBar">
+                    <!-- Populated dynamically by JS with summary counts -->
+                </div>
+
+                <div class="preview-content">
+                    <div class="preview-pane active" id="previewFaculty">
+                        <div class="table-wrapper" id="previewFacultyContainer" style="max-height: 480px; overflow-y: auto;">
+                            <p class="preview-placeholder">Loading faculty data preview...</p>
+                        </div>
+                    </div>
+                    <div class="preview-pane" id="previewCourse">
+                        <div class="table-wrapper" id="previewCourseContainer" style="max-height: 480px; overflow-y: auto;">
+                            <p class="preview-placeholder">Loading course details preview...</p>
+                        </div>
+                    </div>
+                    <div class="preview-pane" id="previewCharts">
+                        <div class="preview-charts-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 10px 0;">
+                            <div class="chart-card" style="margin: 0;">
+                                <div class="chart-card-header">
+                                    <h3><i class="fa-solid fa-chart-pie" style="color: #38bdf8;"></i> Faculty Roster Distribution</h3>
+                                    <span class="badge badge-info">By Designation & Role</span>
+                                </div>
+                                <div class="chart-card-body" style="height: 280px;">
+                                    <canvas id="chartPreviewRoles"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-card" style="margin: 0;">
+                                <div class="chart-card-header">
+                                    <h3><i class="fa-solid fa-chart-column" style="color: #10b981;"></i> Course Contact Hours</h3>
+                                    <span class="badge badge-info">L, T, P Breakdown</span>
+                                </div>
+                                <div class="chart-card-body" style="height: 280px;">
+                                    <canvas id="chartPreviewCourses"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; border-top: 1px solid var(--card-border); background: rgba(15, 23, 42, 0.6);">
+                <div style="font-size: 0.82rem; color: #94a3b8;">
+                    <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Showing compliant data ready for OR-Tools ILP optimization and LTPC workload calculation.
+                </div>
+                <button type="button" id="previewCloseFooterBtn" class="btn btn-secondary btn-sm">Close Preview</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Live AI Chatbot Widget -->
+    <div class="chat-widget-container" id="chatWidgetContainer">
+        <!-- Floating Trigger Button -->
+        <button class="chat-trigger-btn" id="chatTriggerBtn" title="Ask Allocation AI Assistant">
+            <i class="fa-solid fa-robot"></i>
+            <span class="chat-badge-pulse"></span>
+            <span class="chat-trigger-label">💬 AI Assistant: Details & Workload</span>
+        </button>
+
+        <!-- Chat Drawer Window -->
+        <div class="chat-drawer hidden" id="chatDrawer">
+            <div class="chat-header">
+                <div class="chat-header-title">
+                    <i class="fa-solid fa-brain"></i>
+                    <div>
+                        <h4>Allocation AI Assistant</h4>
+                        <span class="chat-status"><span class="status-dot"></span> Live Q&A & Scenario A/B</span>
+                    </div>
+                </div>
+                <button class="chat-close-btn" id="chatCloseBtn" title="Close Chat"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Chat Messages Window -->
+            <div class="chat-body" id="chatBody">
+                <div class="chat-message assistant-msg">
+                    <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+                    <div class="msg-bubble">
+                        Hello! 👋 I'm your Allocation AI Assistant. Ask me questions about workload hours, non-assignments, or click a suggestion below:
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suggestion Chips -->
+            <div class="chat-suggestions" id="chatSuggestions">
+                <button class="chip-btn" data-query="What is the workload pattern across designations?">📊 Workload Pattern by Role</button>
+                <button class="chip-btn" data-query="Tell details of Dr. Rajesh Kumar allocation">👤 Particular Faculty Details</button>
+                <button class="chip-btn" data-query="Details of Machine Learning course allocation">📚 Course Allocation</button>
+                <button class="chip-btn" data-query="Show timetable for Section A">🏛️ Section A Timetable</button>
+                <button class="chip-btn" data-query="Show faculty teaching > 15 hours/week">⚖️ Hours > 15/wk</button>
+            </div>
+
+            <!-- Chat Input Area -->
+            <div class="chat-footer">
+                <input type="text" id="chatInput" placeholder="Ask a question about allocations..." autocomplete="off">
+                <button id="chatSendBtn" class="chat-send-btn" title="Send Message">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

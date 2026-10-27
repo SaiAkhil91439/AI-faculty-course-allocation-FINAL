@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | AI Faculty Allocation Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/login.css">
+</head>
+<body>
+    <div class="background-slideshow" aria-hidden="true">
+        <div class="slide active" style="background-image:url('/static/assets/college2.jpeg')"></div>
+        <div class="slide" style="background-image:url('/static/assets/college3.jpeg')"></div>
+        <div class="slide" style="background-image:url('/static/assets/college4.jpeg')"></div>
+        <div class="slide" style="background-image:url('/static/assets/college5.jpeg')"></div>
+        <div class="background-overlay"></div>
+    </div>
+
+    <main class="login-shell">
+        <section class="login-card">
+            <div class="brand-mark"><span>AI</span></div>
+            <p class="eyebrow">VIGNAN'S UNIVERSITY</p>
+            <h1>Faculty Allocation Agent</h1>
+            <p class="welcome">Sign in to access the AI-powered faculty, subject and section allocation system.</p>
+
+            <form id="loginForm" action="/api/login" method="POST" autocomplete="on">
+                <label for="username">Username</label>
+                <div class="input-wrap">
+                    <span>◉</span>
+                    <input id="username" name="username" type="text" placeholder="Enter username" autocomplete="username" required>
+                </div>
+
+                <label for="password">Password</label>
+                <div class="input-wrap">
+                    <span>●</span>
+                    <input id="password" name="password" type="password" placeholder="Enter password" autocomplete="current-password" required>
+                    <button type="button" id="togglePassword" aria-label="Show password">Show</button>
+                </div>
+
+                <div id="loginError" class="login-error" role="alert"></div>
+                <button class="login-btn" type="submit">Sign In <span>→</span></button>
+            </form>
+
+            <!-- Demo Credentials Helper Box -->
+            <div style="margin-top: 14px; padding: 10px 12px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; font-size: 0.8rem; color: #94a3b8; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div>
+                    <strong style="color: #38bdf8;">🔑 Demo Login Credentials:</strong><br/>
+                    Username: <code style="color: #f1f5f9; background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 4px;">admin</code> | Password: <code style="color: #f1f5f9; background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 4px;">admin123</code>
+                </div>
+                <button type="button" id="btnFillDemo" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); padding: 5px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s;">
+                    Auto-Fill
+                </button>
+            </div>
+
+            <p class="security-note">🔒 Authorized users only</p>
+        </section>
+    </main>
+
+    <div class="slide-dots" aria-label="Campus background slideshow">
+        <button class="dot active" data-slide="0" aria-label="Campus image 1"></button>
+        <button class="dot" data-slide="1" aria-label="Campus image 2"></button>
+        <button class="dot" data-slide="2" aria-label="Campus image 3"></button>
+        <button class="dot" data-slide="3" aria-label="Campus image 4"></button>
+    </div>
+
+    <script>
+        const slides = [...document.querySelectorAll('.slide')];
+        const dots = [...document.querySelectorAll('.dot')];
+        let current = 0;
+
+        function showSlide(index) {
+            current = (index + slides.length) % slides.length;
+            slides.forEach((slide, i) => slide.classList.toggle('active', i === current));
+            dots.forEach((dot, i) => dot.classList.toggle('active', i === current));
+        }
+
+        dots.forEach(dot => dot.addEventListener('click', () => showSlide(Number(dot.dataset.slide))));
+        setInterval(() => showSlide(current + 1), 5500);
+
+        const password = document.getElementById('password');
+        document.getElementById('togglePassword').addEventListener('click', function () {
+            const visible = password.type === 'text';
+            password.type = visible ? 'password' : 'text';
+            this.textContent = visible ? 'Show' : 'Hide';
+        });
+
+        document.getElementById('btnFillDemo')?.addEventListener('click', () => {
+            document.getElementById('username').value = 'admin';
+            password.value = 'admin123';
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const error = document.getElementById('loginError');
+            const button = event.currentTarget.querySelector('.login-btn');
+            error.textContent = '';
+            button.disabled = true;
+            button.innerHTML = 'Signing in <span>…</span>';
+
+            const body = new URLSearchParams();
+            body.set('username', document.getElementById('username').value.trim());
+            body.set('password', password.value);
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    window.location.replace('/');
+                    return;
+                }
+                error.textContent = data.detail || data.message || 'Invalid username or password.';
+            } catch (err) {
+                event.target.submit();
+                return;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Sign In <span>→</span>';
+            }
+        });
+    </script>
+</body>
+</html>
