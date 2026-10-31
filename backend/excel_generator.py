@@ -12,11 +12,14 @@ def generate_allocation_excel(
     output_path: str = "output/faculty_allocation.xlsx"
 ) -> str:
     """
-    Generates a professionally styled, comprehensive Excel workbook with 4 tabs:
-    1. Master Allocation Matrix: Clear Section x Subject matrix with full faculty names.
-    2. Faculty Workload Allocation: Detailed institutional workload breakdown.
-    3. Course Section Schedule: Per-section component (L, T/P 1, T/P 2) faculty assignments.
-    4. Faculty Workload Summary: Executive summary of all faculty teaching hours and duties.
+    Generates a professionally styled, comprehensive Excel workbook with tabs:
+    1. Master Allocation Matrix: Section x Course Grid with Lecture Faculty & Custom TAs.
+    2. Faculty Workload Allocation: Detailed institutional workload breakdown per section.
+    3. Course Section Schedule: Per-section faculty & TA assignments.
+    4. Teaching Assistants Allocation: Dedicated TA roster, assignments & supervising faculty.
+    5. Faculty Workload Summary: Executive overview of faculty teaching hours & compliance.
+    6. LTPC Workload Calculation: Single-section and department contact hours formula table.
+    7. Staffing Efficiency Scenarios: Alternative staffing models.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     wb = openpyxl.Workbook()
@@ -27,7 +30,8 @@ def generate_allocation_excel(
     sub_header_fill = PatternFill(start_color="41719C", end_color="41719C", fill_type="solid")
     alt_fill_1 = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
     alt_fill_2 = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
-    dean_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid") # Soft green for Dean / HOD
+    dean_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+    ta_fill = PatternFill(start_color="E8F0FE", end_color="E8F0FE", fill_type="solid")
     matrix_cell_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
 
     font_banner = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
@@ -43,18 +47,14 @@ def generate_allocation_excel(
         top=Side(style="thin", color="CBD5E1"),
         bottom=Side(style="thin", color="CBD5E1")
     )
-    medium_border = Border(
-        left=Side(style="medium", color="1E293B"),
-        right=Side(style="medium", color="1E293B"),
-        top=Side(style="medium", color="1E293B"),
-        bottom=Side(style="medium", color="1E293B")
-    )
 
     allocs = allocation_res.get("faculty_allocations", [])
     matrix = allocation_res.get("final_allocation_matrix", {})
     subjects = allocation_res.get("subjects", [])
     section_names = allocation_res.get("section_names", [])
     course_details = allocation_res.get("course_details", {})
+    ta_allocs = allocation_res.get("ta_allocations", [])
+    tas_per_section = allocation_res.get("tas_per_section", 2)
 
     # =========================================================================
     # TAB 1: Master Allocation Matrix (Section x Course Grid)
@@ -80,14 +80,14 @@ def generate_allocation_excel(
         f"Optimization Status: {allocation_res.get('status', 'OPTIMAL')} | "
         f"Average Compatibility Score: {allocation_res.get('average_score', 0)}/100 | "
         f"Total Sections: {allocation_res.get('num_sections', len(section_names))} | "
-        f"Subjects: {allocation_res.get('num_subjects', len(subjects))}"
+        f"Courses: {len(subjects)} | Teaching Assistants per Section: {tas_per_section}"
     )
     sub1.font = font_subtitle
     sub1.alignment = Alignment(horizontal="center", vertical="center")
     ws_mat.row_dimensions[2].height = 22
 
     # Headers at Row 4
-    ws_mat.row_dimensions[4].height = 38
+    ws_mat.row_dimensions[4].height = 42
     c_sec = ws_mat.cell(row=4, column=1, value="Section")
     c_sec.fill = blue_header_fill
     c_sec.font = font_header
@@ -98,7 +98,10 @@ def generate_allocation_excel(
         c_info = course_details.get(s, {})
         ltpc = c_info.get("L-T-P-C", "3-0-2-4")
         hrs = c_info.get("Total_Hours", 5)
-        header_text = f"{s}\n[{ltpc}] ({hrs} hrs/wk)"
+        yr = c_info.get("Year", "")
+        c_code = c_info.get("Course_Code", "")
+        code_str = f" ({c_code})" if c_code else ""
+        header_text = f"{s}{code_str}\n[{ltpc}] ({hrs} hrs/wk)"
         cell = ws_mat.cell(row=4, column=col_idx, value=header_text)
         cell.fill = blue_header_fill
         cell.font = font_header
@@ -108,7 +111,7 @@ def generate_allocation_excel(
     # Data Rows for Matrix
     mat_row_idx = 5
     for sec in section_names:
-        ws_mat.row_dimensions[mat_row_idx].height = 58
+        ws_mat.row_dimensions[mat_row_idx].height = 62
         cell_sec = ws_mat.cell(row=mat_row_idx, column=1, value=f"Section {sec}")
         cell_sec.font = font_bold_data
         cell_sec.fill = alt_fill_2
@@ -118,10 +121,17 @@ def generate_allocation_excel(
         for col_idx, s in enumerate(subjects, 2):
             sec_info = matrix.get(sec, {}).get(s, {})
             l_fac = sec_info.get("Lecture_Faculty", "N/A")
-            tp1_fac = sec_info.get("TP_Faculty_1", "N/A")
-            tp2_fac = sec_info.get("TP_Faculty_2", "N/A")
+            l_desig = sec_info.get("Lecture_Designation", "")
+            tas_list = sec_info.get("Teaching_Assistants", [])
 
-            cell_val = f"L: {l_fac}\nT/P 1: {tp1_fac}\nT/P 2: {tp2_fac}"
+            if tas_list:
+                ta_str = "\n".join([f"  • {ta}" for ta in tas_list])
+                cell_val = f"L: {l_fac}\nTAs ({len(tas_list)}):\n{ta_str}"
+            else:
+                tp1_fac = sec_info.get("TP_Faculty_1", "N/A")
+                tp2_fac = sec_info.get("TP_Faculty_2", "N/A")
+                cell_val = f"L: {l_fac}\nT/P 1: {tp1_fac}\nT/P 2: {tp2_fac}"
+
             c = ws_mat.cell(row=mat_row_idx, column=col_idx, value=cell_val)
             c.font = font_regular_data
             c.fill = matrix_cell_fill
@@ -134,14 +144,14 @@ def generate_allocation_excel(
     ws_mat.column_dimensions["A"].width = 16
     for col_idx in range(2, len(subjects) + 2):
         col_letter = get_column_letter(col_idx)
-        ws_mat.column_dimensions[col_letter].width = 34
+        ws_mat.column_dimensions[col_letter].width = 36
 
     # =========================================================================
     # TAB 2: Faculty Workload Allocation (Full Breakdown)
     # =========================================================================
     ws1 = wb.create_sheet(title="Faculty Workload Allocation")
 
-    ws1.merge_cells("A1:V1")
+    ws1.merge_cells("A1:W1")
     title_cell = ws1["A1"]
     title_cell.value = "DETAILED FACULTY WORKLOAD & COURSE ALLOCATION REPORT"
     title_cell.font = font_banner
@@ -149,10 +159,10 @@ def generate_allocation_excel(
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws1.row_dimensions[1].height = 36
 
-    ws1.merge_cells("A2:V2")
+    ws1.merge_cells("A2:W2")
     sub_cell = ws1["A2"]
     sub_cell.value = (
-        f"Generated with AI Optimization Engine | Faculty Names & Designated Weekly Teaching Hours | "
+        f"Generated with AI Optimization Engine | Multi-Year Courses & Custom TAs | "
         f"Deans: 4-6 hrs/wk | HODs: 10-12 hrs/wk | Faculty: 14-16 hrs/wk"
     )
     sub_cell.font = font_subtitle
@@ -163,7 +173,7 @@ def generate_allocation_excel(
         "Sl. No.", "Name of the Faculty", "Designation", "Additional duties", "Present Workload (hrs/wk)",
         "Program", "Year", "Section", "Name of the COURSE", "Course Code", "L", "T", "P", "C",
         "No. of section", "No. of students", "Total L HOURS", "Total T HOURS", "Total P HOURS",
-        "Total hours course/wk", "Total workload/wk", "Comments / Role"
+        "Total hours course/wk", "Total workload/wk", "Teaching Assistants Under Faculty", "Comments / Role"
     ]
 
     ws1.row_dimensions[4].height = 30
@@ -196,28 +206,32 @@ def generate_allocation_excel(
             secs = [s.strip() for s in a["Sections"].split(",")]
             is_high_exp = a.get("Is_High_Experience_Split", False)
             exp_years = a.get("Experience_Years", 0.0)
+            tas_under_str = a.get("Teaching_Assistants_Str", "None")
 
             comment_str = (
                 f"High Exp Split ({a['Num_Sections']} Secs, {exp_years} yrs exp)"
                 if is_high_exp else f"Main Lecturer ({role})"
             )
 
+            yr_val = a.get("Year", "III Year")
+            course_code_val = a.get("Course_Code", f"CS{100+sl_no}")
+            prog_val = "M.Tech" if "m.tech" in str(yr_val).lower() else "B.Tech"
+
             for sec_clean in secs:
                 ws1.row_dimensions[row_cursor].height = 22
                 ws1.cell(row=row_cursor, column=1, value=sl_no).alignment = Alignment(horizontal="center")
                 
-                # Clear faculty name in column 2
                 c_name = ws1.cell(row=row_cursor, column=2, value=f_name)
                 c_name.font = font_bold_data
 
                 ws1.cell(row=row_cursor, column=3, value=desig)
                 ws1.cell(row=row_cursor, column=4, value=role)
                 ws1.cell(row=row_cursor, column=5, value=w_hours).alignment = Alignment(horizontal="center")
-                ws1.cell(row=row_cursor, column=6, value="AIML").alignment = Alignment(horizontal="center")
-                ws1.cell(row=row_cursor, column=7, value="III").alignment = Alignment(horizontal="center")
+                ws1.cell(row=row_cursor, column=6, value=prog_val).alignment = Alignment(horizontal="center")
+                ws1.cell(row=row_cursor, column=7, value=yr_val).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=8, value=sec_clean).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=9, value=a["Subject"])
-                ws1.cell(row=row_cursor, column=10, value=f"CS{100+sl_no}").alignment = Alignment(horizontal="center")
+                ws1.cell(row=row_cursor, column=10, value=course_code_val).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=11, value=a.get("L", 3)).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=12, value=a.get("T", 0)).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=13, value=a.get("P", 2)).alignment = Alignment(horizontal="center")
@@ -229,9 +243,10 @@ def generate_allocation_excel(
                 ws1.cell(row=row_cursor, column=19, value=a.get("P", 2)).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=20, value=a.get("Total_Course_Hours", 5)).alignment = Alignment(horizontal="center")
                 ws1.cell(row=row_cursor, column=21, value=a.get("Faculty_Total_Weekly_Hours", 15)).alignment = Alignment(horizontal="center")
-                ws1.cell(row=row_cursor, column=22, value=comment_str)
+                ws1.cell(row=row_cursor, column=22, value=tas_under_str)
+                ws1.cell(row=row_cursor, column=23, value=comment_str)
 
-                for col in range(1, 23):
+                for col in range(1, 24):
                     cell = ws1.cell(row=row_cursor, column=col)
                     cell.fill = row_fill
                     cell.border = thin_border
@@ -242,31 +257,31 @@ def generate_allocation_excel(
 
         sl_no += 1
 
-    # Auto-adjust column widths for tab 2
     for col in ws1.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)
         ws1.column_dimensions[col_letter].width = max(max_len + 4, 13)
-    ws1.column_dimensions["B"].width = 28 # Name of Faculty
-    ws1.column_dimensions["C"].width = 28 # Designation
-    ws1.column_dimensions["I"].width = 32 # Name of Course
+    ws1.column_dimensions["B"].width = 28
+    ws1.column_dimensions["C"].width = 28
+    ws1.column_dimensions["I"].width = 34
+    ws1.column_dimensions["V"].width = 36
 
     # =========================================================================
-    # TAB 3: Course Component Schedule (L & T/P Faculty Breakdown)
+    # TAB 3: Course Section Schedule (L & TA Allocation)
     # =========================================================================
     ws2 = wb.create_sheet(title="Course Section Schedule")
 
-    ws2.merge_cells("A1:I1")
+    ws2.merge_cells("A1:J1")
     t2_cell = ws2["A1"]
-    t2_cell.value = "COURSE SECTION FACULTY ASSIGNMENTS (L = 1 Faculty, T/P = 2 Faculty)"
+    t2_cell.value = f"COURSE SECTION FACULTY & TEACHING ASSISTANT ASSIGNMENTS ({tas_per_section} TAs / Section)"
     t2_cell.font = font_banner
     t2_cell.fill = navy_fill
     t2_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws2.row_dimensions[1].height = 36
 
     s2_headers = [
-        "Sl. No.", "Course / Subject", "L-T-P-C", "Section", "Lecture (L) Faculty",
-        "Teaching Experience (Yrs)", "Tutorial / Practical (T/P) Faculty 1", "Tutorial / Practical (T/P) Faculty 2", "Score"
+        "Sl. No.", "Academic Year", "Course Code", "Course / Subject", "L-T-P-C", "Section",
+        "Lecture (L) Faculty", "Teaching Experience (Yrs)", "Assigned Teaching Assistants", "Compatibility Score"
     ]
 
     ws2.row_dimensions[3].height = 30
@@ -284,52 +299,104 @@ def generate_allocation_excel(
         fac_label = f"{a['Lecture_Faculty_Name']} ({a['Lecture_Designation']})" + (" [High Exp 2+1 Split]" if is_high else "")
         
         ws2.cell(row=r2_idx, column=1, value=idx_item).alignment = Alignment(horizontal="center")
-        ws2.cell(row=r2_idx, column=2, value=a["Subject"])
-        ws2.cell(row=r2_idx, column=3, value=a.get("L-T-P-C", "3-0-2-4")).alignment = Alignment(horizontal="center")
-        ws2.cell(row=r2_idx, column=4, value=a["Sections"]).alignment = Alignment(horizontal="center")
+        ws2.cell(row=r2_idx, column=2, value=a.get("Year", "N/A")).alignment = Alignment(horizontal="center")
+        ws2.cell(row=r2_idx, column=3, value=a.get("Course_Code", "N/A")).alignment = Alignment(horizontal="center")
+        ws2.cell(row=r2_idx, column=4, value=a["Subject"])
+        ws2.cell(row=r2_idx, column=5, value=a.get("L-T-P-C", "3-0-2-4")).alignment = Alignment(horizontal="center")
+        ws2.cell(row=r2_idx, column=6, value=a["Sections"]).alignment = Alignment(horizontal="center")
         
-        # Lecture Faculty Name
-        cL = ws2.cell(row=r2_idx, column=5, value=fac_label)
+        cL = ws2.cell(row=r2_idx, column=7, value=fac_label)
         cL.font = font_bold_data
 
-        ws2.cell(row=r2_idx, column=6, value=a.get("Experience_Years", 0.0)).alignment = Alignment(horizontal="center")
-        
-        # T/P Faculty 1 Name
-        cTP1 = ws2.cell(row=r2_idx, column=7, value=a["TP_Faculty_1_Name"])
-        cTP1.font = font_regular_data
-
-        # T/P Faculty 2 Name
-        cTP2 = ws2.cell(row=r2_idx, column=8, value=a["TP_Faculty_2_Name"])
-        cTP2.font = font_regular_data
-
-        ws2.cell(row=r2_idx, column=9, value=a["Score"]).alignment = Alignment(horizontal="center")
+        ws2.cell(row=r2_idx, column=8, value=a.get("Experience_Years", 0.0)).alignment = Alignment(horizontal="center")
+        ws2.cell(row=r2_idx, column=9, value=a.get("Teaching_Assistants_Str", a.get("TP_Faculty_1_Name", "N/A")))
+        ws2.cell(row=r2_idx, column=10, value=a["Score"]).alignment = Alignment(horizontal="center")
 
         row_f = alt_fill_1 if idx_item % 2 != 0 else alt_fill_2
-        for col in range(1, 10):
+        for col in range(1, 11):
             cell = ws2.cell(row=r2_idx, column=col)
             cell.border = thin_border
             cell.fill = row_f
-            if col not in (5,):
+            if col not in (7,):
                 cell.font = font_regular_data
 
         r2_idx += 1
 
-    # Widths for tab 3
     for col in ws2.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)
         ws2.column_dimensions[col_letter].width = max(max_len + 4, 14)
-    ws2.column_dimensions["B"].width = 30 # Course
-    ws2.column_dimensions["E"].width = 36 # Lecture Faculty
-    ws2.column_dimensions["G"].width = 28 # TP 1
-    ws2.column_dimensions["H"].width = 28 # TP 2
+    ws2.column_dimensions["D"].width = 32
+    ws2.column_dimensions["G"].width = 36
+    ws2.column_dimensions["I"].width = 36
 
     # =========================================================================
-    # TAB 4: Faculty Workload Summary (Executive Overview)
+    # TAB 4: Teaching Assistants Allocation (Dedicated Roster Sheet)
+    # =========================================================================
+    if ta_allocs:
+        ws_ta = wb.create_sheet(title="Teaching Assistants Allocation")
+
+        ws_ta.merge_cells("A1:I1")
+        t_ta = ws_ta["A1"]
+        t_ta.value = f"TEACHING ASSISTANTS ALLOCATION & SUPERVISING FACULTY ({tas_per_section} TAs / Section)"
+        t_ta.font = font_banner
+        t_ta.fill = navy_fill
+        t_ta.alignment = Alignment(horizontal="center", vertical="center")
+        ws_ta.row_dimensions[1].height = 36
+
+        ta_headers = [
+            "Sl. No.", "TA ID", "Name of the Teaching Assistant", "Academic Year",
+            "Course Code", "Name of the Course", "Section", "Supervising Lecture Faculty", "Preference Score"
+        ]
+
+        ws_ta.row_dimensions[3].height = 30
+        for col_idx, text in enumerate(ta_headers, 1):
+            cell = ws_ta.cell(row=3, column=col_idx, value=text)
+            cell.fill = blue_header_fill
+            cell.font = font_header
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
+
+        r_ta_idx = 4
+        for idx_ta, ta_rec in enumerate(ta_allocs, 1):
+            ws_ta.row_dimensions[r_ta_idx].height = 22
+            ws_ta.cell(row=r_ta_idx, column=1, value=idx_ta).alignment = Alignment(horizontal="center")
+            ws_ta.cell(row=r_ta_idx, column=2, value=ta_rec.get("TA_ID", "")).alignment = Alignment(horizontal="center")
+            
+            c_taname = ws_ta.cell(row=r_ta_idx, column=3, value=ta_rec.get("TA_Name", ""))
+            c_taname.font = font_bold_data
+
+            ws_ta.cell(row=r_ta_idx, column=4, value=ta_rec.get("Year", "N/A")).alignment = Alignment(horizontal="center")
+            ws_ta.cell(row=r_ta_idx, column=5, value=ta_rec.get("Course_Code", "N/A")).alignment = Alignment(horizontal="center")
+            ws_ta.cell(row=r_ta_idx, column=6, value=ta_rec.get("Subject", ""))
+            ws_ta.cell(row=r_ta_idx, column=7, value=f"Section {ta_rec.get('Section', '')}").alignment = Alignment(horizontal="center")
+            ws_ta.cell(row=r_ta_idx, column=8, value=ta_rec.get("Supervising_Faculty", "N/A"))
+            ws_ta.cell(row=r_ta_idx, column=9, value=ta_rec.get("Preference_Score", 10.0)).alignment = Alignment(horizontal="center")
+
+            row_f = ta_fill if idx_ta % 2 != 0 else alt_fill_1
+            for col in range(1, 10):
+                cell = ws_ta.cell(row=r_ta_idx, column=col)
+                cell.border = thin_border
+                cell.fill = row_f
+                if col != 3:
+                    cell.font = font_regular_data
+
+            r_ta_idx += 1
+
+        for col in ws_ta.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws_ta.column_dimensions[col_letter].width = max(max_len + 4, 14)
+        ws_ta.column_dimensions["C"].width = 28
+        ws_ta.column_dimensions["F"].width = 34
+        ws_ta.column_dimensions["H"].width = 30
+
+    # =========================================================================
+    # TAB 5: Faculty Workload Summary (Executive Overview)
     # =========================================================================
     ws3 = wb.create_sheet(title="Faculty Workload Summary")
 
-    ws3.merge_cells("A1:I1")
+    ws3.merge_cells("A1:J1")
     t3_cell = ws3["A1"]
     t3_cell.value = "EXECUTIVE FACULTY ALLOCATION & TEACHING HOURS SUMMARY"
     t3_cell.font = font_banner
@@ -340,7 +407,7 @@ def generate_allocation_excel(
     s3_headers = [
         "Sl. No.", "Faculty Name", "Designation", "Academic Role",
         "Allocated Courses", "Allocated Sections", "Total Sections",
-        "Total Weekly Hours", "Workload Compliance"
+        "Total Weekly Hours", "TAs Under Supervision", "Workload Compliance"
     ]
 
     ws3.row_dimensions[3].height = 30
@@ -362,6 +429,7 @@ def generate_allocation_excel(
         courses_str = ", ".join(courses_set)
 
         all_secs = []
+        all_tas = set()
         tot_secs = 0
         tot_hours = 0
         for a in f_allocs:
@@ -369,14 +437,16 @@ def generate_allocation_excel(
             all_secs.extend(s_list)
             tot_secs += len(s_list)
             tot_hours += a.get("Total_Course_Hours", 5) * len(s_list)
+            for t in a.get("Teaching_Assistants", []):
+                all_tas.add(t)
 
         secs_str = ", ".join(all_secs)
+        tas_summary_str = ", ".join(sorted(list(all_tas))) if all_tas else "None"
         target_range = "4-6 hrs" if role == "Dean" else ("10-12 hrs" if role == "HOD" else "14-16 hrs")
         status_note = f"Balanced ({target_range})"
 
         ws3.cell(row=r3_idx, column=1, value=sum_idx).alignment = Alignment(horizontal="center")
         
-        # Clearly printed faculty name
         cf = ws3.cell(row=r3_idx, column=2, value=f_name)
         cf.font = font_bold_data
 
@@ -386,10 +456,11 @@ def generate_allocation_excel(
         ws3.cell(row=r3_idx, column=6, value=secs_str).alignment = Alignment(horizontal="center")
         ws3.cell(row=r3_idx, column=7, value=tot_secs).alignment = Alignment(horizontal="center")
         ws3.cell(row=r3_idx, column=8, value=tot_hours).alignment = Alignment(horizontal="center")
-        ws3.cell(row=r3_idx, column=9, value=status_note).alignment = Alignment(horizontal="center")
+        ws3.cell(row=r3_idx, column=9, value=tas_summary_str)
+        ws3.cell(row=r3_idx, column=10, value=status_note).alignment = Alignment(horizontal="center")
 
         row_f = dean_fill if role in ("Dean", "HOD") else (alt_fill_1 if sum_idx % 2 != 0 else alt_fill_2)
-        for col in range(1, 10):
+        for col in range(1, 11):
             c = ws3.cell(row=r3_idx, column=col)
             c.border = thin_border
             c.fill = row_f
@@ -398,17 +469,17 @@ def generate_allocation_excel(
 
         r3_idx += 1
 
-    # Widths for tab 4
     for col in ws3.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)
         ws3.column_dimensions[col_letter].width = max(max_len + 4, 15)
-    ws3.column_dimensions["B"].width = 28 # Name
-    ws3.column_dimensions["C"].width = 28 # Designation
-    ws3.column_dimensions["E"].width = 34 # Courses
+    ws3.column_dimensions["B"].width = 28
+    ws3.column_dimensions["C"].width = 28
+    ws3.column_dimensions["E"].width = 34
+    ws3.column_dimensions["I"].width = 36
 
     # =========================================================================
-    # TAB 5: LTPC Workload Calculation (Formula Analysis)
+    # TAB 6: LTPC Workload Calculation (Formula Analysis)
     # =========================================================================
     workload_data = allocation_res.get("workload_analysis")
     if not workload_data:
@@ -428,11 +499,10 @@ def generate_allocation_excel(
     ws_ltpc = wb.create_sheet(title="LTPC Workload Calculation")
     create_ltpc_workload_sheet(ws_ltpc, workload_data)
 
-    # TAB 6: Staffing Efficiency Scenarios
+    # TAB 7: Staffing Efficiency Scenarios
     ws_eff = wb.create_sheet(title="Staffing Efficiency Scenarios")
     create_efficiency_scenarios_sheet(ws_eff, workload_data)
 
-    # Persist standalone clear load calculation excel
     standalone_path = os.path.join(os.path.dirname(output_path), "ltpc_workload_calculation.xlsx")
     generate_workload_excel(workload_data, standalone_path)
 

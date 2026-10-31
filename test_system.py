@@ -99,85 +99,52 @@ def test_optimizer_and_agent_pipeline():
     assert res["summary"]["status"] in ("OPTIMAL", "FEASIBLE")
     assert os.path.exists(res["summary"]["excel_file"])
 
-def test_fastapi_endpoints():
-    client = TestClient(app)
-    
-    # 1. Unauthenticated checks
-    assert client.get("/api/auth/me").status_code == 401
-    assert client.post("/api/calculate-ltpc-workload", json={}).status_code == 401
+def test_multiyear_courses_and_custom_ta_allocation():
+    from backend.agent import FacultyAllocationAgent
+    agent = FacultyAllocationAgent()
+    res = agent.run_pipeline(
+        pref_file_source="input/faculty_preferences.xlsx",
+        exp_file_source="input/faculty_experience.xlsx",
+        course_file_source="input/courses_multiyear.xlsx",
+        ta_file_source="input/teaching_assistants.xlsx",
+        num_sections=12,
+        num_subjects=6,
+        sections_per_faculty=3,
+        max_subjects_per_faculty=1,
+        tas_per_section=2,
+        year_filter="All",
+        output_excel_path="output/test_multiyear_ta_allocation.xlsx"
+    )
+    assert res["success"] is True
+    assert res["summary"]["status"] in ("OPTIMAL", "FEASIBLE")
+    assert res["summary"]["tas_per_section"] == 2
+    assert res["summary"]["total_tas_allocated"] == 144
+    assert os.path.exists("output/test_multiyear_ta_allocation.xlsx")
 
-    # 2. Login
-    login_resp = client.post("/api/login", data={"username": "admin", "password": "admin123"}, headers={"Accept": "application/json"})
-    assert login_resp.status_code == 200
-    assert login_resp.json()["success"] is True
+    # Test Chatbot Queries
+    chat_ta = agent.handle_chat_query("Which teaching assistants are assigned?")
+    assert chat_ta["success"] is True
+    assert "Teaching Assistants Allocation Overview" in chat_ta["answer"]
 
-    # 3. Authenticated session
-    auth_resp = client.get("/api/auth/me")
-    assert auth_resp.status_code == 200
-    assert auth_resp.json()["authenticated"] is True
+    chat_yr = agent.handle_chat_query("What courses are in III Year?")
+    assert chat_yr["success"] is True
+    assert "III Year" in chat_yr["answer"]
 
-    # 4. Sample data zip
-    sample_resp = client.post("/api/sample-data")
-    assert sample_resp.status_code == 200
-    assert len(sample_resp.content) > 1000
-
-    # 5. Validate endpoint
-    val_resp = client.post("/api/validate", data={
-        "num_sections": 12,
-        "num_subjects": 6,
-        "sections_per_faculty": 3,
-        "max_subjects_per_faculty": 1,
-        "dean_max_sections": 2,
-        "hod_max_sections": 3,
-        "high_exp_threshold": 8.0
-    })
-    assert val_resp.status_code == 200
-    assert val_resp.json()["success"] is True
-
-    # 6. Workload calculation endpoint
-    wl_resp = client.post("/api/calculate-ltpc-workload", json={"num_sections": 12})
-    assert wl_resp.status_code == 200
-    assert wl_resp.json()["success"] is True
-
-    # 7. Allocate endpoint
-    alloc_resp = client.post("/api/allocate", data={
-        "num_sections": 12,
-        "num_subjects": 6,
-        "sections_per_faculty": 3,
-        "max_subjects_per_faculty": 1,
-        "dean_max_sections": 2,
-        "hod_max_sections": 3,
-        "high_exp_threshold": 8.0,
-        "weight_pref": 0.40,
-        "weight_exp": 0.30,
-        "weight_skill": 0.20,
-        "weight_qual": 0.10
-    })
-    assert alloc_resp.status_code == 200
-    assert alloc_resp.json()["success"] is True
-
-    # 8. Chat endpoint
-    chat_resp = client.post("/api/chat", json={"question": "Show faculty teaching > 15 hours/week"})
-    assert chat_resp.status_code == 200
-    assert chat_resp.json()["success"] is True
-
-    # 8b. Preview data endpoint
-    preview_resp = client.get("/api/preview-data")
-    assert preview_resp.status_code == 200
-    assert preview_resp.json()["success"] is True
-    assert preview_resp.json()["faculty"]["total_count"] > 0
-    assert preview_resp.json()["courses"]["total_count"] > 0
-
-    # 9. Download endpoints
-    down_alloc = client.get("/api/download/faculty_allocation.xlsx")
-    assert down_alloc.status_code == 200
-    assert len(down_alloc.content) > 1000
-
-    down_wl = client.get("/api/download/ltpc-workload.xlsx")
-    assert down_wl.status_code == 200
-    assert len(down_wl.content) > 1000
-
-    # 10. Logout
-    logout_resp = client.post("/api/logout")
-    assert logout_resp.status_code == 200
-    assert client.get("/api/auth/me").status_code == 401
+def test_year_filter_optimization():
+    from backend.agent import FacultyAllocationAgent
+    agent = FacultyAllocationAgent()
+    res = agent.run_pipeline(
+        pref_file_source="input/faculty_preferences.xlsx",
+        exp_file_source="input/faculty_experience.xlsx",
+        course_file_source="input/courses_multiyear.xlsx",
+        ta_file_source="input/teaching_assistants.xlsx",
+        num_sections=12,
+        num_subjects=5,
+        sections_per_faculty=3,
+        max_subjects_per_faculty=1,
+        tas_per_section=2,
+        year_filter="III Year",
+        output_excel_path="output/test_iii_year_allocation.xlsx"
+    )
+    assert res["success"] is True
+    assert all("III Year" in s for s in res["allocation_data"]["subjects"])

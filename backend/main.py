@@ -73,12 +73,14 @@ def resolve_file_sources(
     faculty_file: Optional[UploadFile] = None,
     pref_file: Optional[UploadFile] = None,
     exp_file: Optional[UploadFile] = None,
-    course_file: Optional[UploadFile] = None
+    course_file: Optional[UploadFile] = None,
+    ta_file: Optional[UploadFile] = None
 ):
     """Safely extracts valid file streams from multipart form or falls back to disk samples."""
     target_fac = faculty_file if is_valid_upload(faculty_file) else (pref_file if is_valid_upload(pref_file) else None)
     has_exp = is_valid_upload(exp_file)
     has_course = is_valid_upload(course_file)
+    has_ta = is_valid_upload(ta_file)
 
     if target_fac:
         pref_src = target_fac.file
@@ -96,11 +98,26 @@ def resolve_file_sources(
             pref_src = os.path.join(UPLOAD_DIR, "faculty_preferences.xlsx")
             exp_src = os.path.join(UPLOAD_DIR, "faculty_experience.xlsx")
 
-    course_src = course_file.file if has_course else (
-        os.path.join(UPLOAD_DIR, "course_details.xlsx") if os.path.exists(os.path.join(UPLOAD_DIR, "course_details.xlsx")) else None
-    )
+    if has_course:
+        course_src = course_file.file
+    else:
+        # Match course file with faculty file source
+        if pref_src and "preferences" in str(pref_src).lower():
+            multi_course = os.path.join(UPLOAD_DIR, "courses_multiyear.xlsx")
+            norm_course = os.path.join(UPLOAD_DIR, "course_details.xlsx")
+            course_src = multi_course if os.path.exists(multi_course) else (norm_course if os.path.exists(norm_course) else None)
+        else:
+            norm_course = os.path.join(UPLOAD_DIR, "course_details.xlsx")
+            multi_course = os.path.join(UPLOAD_DIR, "courses_multiyear.xlsx")
+            course_src = norm_course if os.path.exists(norm_course) else (multi_course if os.path.exists(multi_course) else None)
 
-    return pref_src, exp_src, course_src
+    if has_ta:
+        ta_src = ta_file.file
+    else:
+        ta_sample = os.path.join(UPLOAD_DIR, "teaching_assistants.xlsx")
+        ta_src = ta_sample if os.path.exists(ta_sample) else None
+
+    return pref_src, exp_src, course_src, ta_src
 
 def sanitize_for_json(data: Any) -> Any:
     """Recursively converts numpy and pandas types to standard Python primitives for JSON response."""
@@ -182,17 +199,18 @@ async def preview_data(
     faculty_file: Optional[UploadFile] = File(None),
     pref_file: Optional[UploadFile] = File(None),
     exp_file: Optional[UploadFile] = File(None),
-    course_file: Optional[UploadFile] = File(None)
+    course_file: Optional[UploadFile] = File(None),
+    ta_file: Optional[UploadFile] = File(None)
 ):
     """
-    Returns preview records, summary analytics, and column details for faculty and course data.
-    Works with either uploaded Excel files or default sample Excel files.
+    Returns preview records, summary analytics, and column details for faculty, course curriculum,
+    and Teaching Assistants (TAs). Works with either uploaded Excel files or default sample files.
     """
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
-        pref_src, exp_src, course_src = resolve_file_sources(faculty_file, pref_file, exp_file, course_file)
-        pref_df, exp_df, course_df = load_all_excel_files(pref_src, exp_src, course_src)
+        pref_src, exp_src, course_src, ta_src = resolve_file_sources(faculty_file, pref_file, exp_file, course_file, ta_file)
+        pref_df, exp_df, course_df, ta_df = load_all_excel_files(pref_src, exp_src, course_src, ta_src, return_ta=True)
 
         faculty_records = []
         role_counts = {}
@@ -223,7 +241,6 @@ async def preview_data(
             
             fid = str(row.get("Faculty_ID", "")).strip()
 
-            # Extract full preferences list
             pref_list = []
             for r in range(1, 11):
                 col = f"Preference_{r}"
@@ -251,12 +268,16 @@ async def preview_data(
             })
 
         course_records = []
+        years_available = []
         total_l = 0
         total_t = 0
         total_p = 0
         total_c = 0
         total_contact = 0
         if course_df is not None and not course_df.empty:
+            if "Year" in course_df.columns:
+                years_available = [str(y).strip() for y in course_df["Year"].dropna().unique() if str(y).strip()]
+
             for idx, row in course_df.iterrows():
                 l = int(row.get("L", 0))
                 t = int(row.get("T", 0))
@@ -270,6 +291,8 @@ async def preview_data(
                 total_contact += contact
                 course_records.append({
                     "sl_no": idx + 1,
+                    "Year": str(row.get("Year", "N/A")),
+                    "Course_Code": str(row.get("Course_Code", f"CS{idx+1}")),
                     "Subject": str(row.get("Subject", f"Course {idx+1}")),
                     "L": l,
                     "T": t,
@@ -277,6 +300,29 @@ async def preview_data(
                     "C": c,
                     "L-T-P-C": str(row.get("L-T-P-C", f"{l}-{t}-{p}-{c}")),
                     "Total_Hours": contact
+                })
+
+        # Process Teaching Assistants records
+        ta_records = []
+        if ta_df is not None and not ta_df.empty:
+            for idx, row in ta_df.iterrows():
+                t_id = str(row.get("TA_ID", f"TA{idx+1:03d}")).strip()
+                t_name = str(row.get("TA_Name", f"TA {idx+1}")).strip()
+
+                t_prefs = []
+                for r in range(1, 6):
+                    c_col = f"Preference_{r}"
+                    if c_col in row and pd.notna(row[c_col]):
+                        val = str(row[c_col]).strip()
+                        if val and val.lower() not in ("none", "nan", ""):
+                            t_prefs.append(f"{r}. {val}")
+
+                ta_records.append({
+                    "sl_no": idx + 1,
+                    "TA_ID": t_id,
+                    "TA_Name": t_name,
+                    "Preferences": ", ".join(t_prefs) if t_prefs else "Open to any course",
+                    "Preferences_List": t_prefs
                 })
 
         return JSONResponse(content=jsonable_encoder(sanitize_for_json({
@@ -290,11 +336,16 @@ async def preview_data(
             "courses": {
                 "records": course_records,
                 "total_count": len(course_records),
+                "years_available": years_available,
                 "total_l": total_l,
                 "total_t": total_t,
                 "total_p": total_p,
                 "total_c": total_c,
                 "total_contact_hours": total_contact
+            },
+            "teaching_assistants": {
+                "records": ta_records,
+                "total_count": len(ta_records)
             }
         })))
     except Exception as e:
@@ -314,20 +365,22 @@ async def validate_allocation_request(
     dean_max_sections: int = Form(2),
     hod_max_sections: int = Form(3),
     high_exp_threshold: float = Form(8.0),
+    tas_per_section: int = Form(2),
+    year_filter: Optional[str] = Form("All"),
     faculty_file: Optional[UploadFile] = File(None),
     pref_file: Optional[UploadFile] = File(None),
     exp_file: Optional[UploadFile] = File(None),
-    course_file: Optional[UploadFile] = File(None)
+    course_file: Optional[UploadFile] = File(None),
+    ta_file: Optional[UploadFile] = File(None)
 ):
     """
-    Validates uploaded Excel files and configuration inputs.
-    Accepts single combined faculty file or legacy split files.
+    Validates uploaded Excel files, academic year configuration, and TA settings.
     """
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
-        pref_src, exp_src, course_src = resolve_file_sources(faculty_file, pref_file, exp_file, course_file)
-        pref_df, exp_df, course_df = load_all_excel_files(pref_src, exp_src, course_src)
+        pref_src, exp_src, course_src, ta_src = resolve_file_sources(faculty_file, pref_file, exp_file, course_file, ta_file)
+        pref_df, exp_df, course_df, ta_df = load_all_excel_files(pref_src, exp_src, course_src, ta_src, return_ta=True)
         
         val_summary = validate_inputs(
             pref_df=pref_df,
@@ -339,7 +392,10 @@ async def validate_allocation_request(
             course_df=course_df,
             dean_max_sections=dean_max_sections,
             hod_max_sections=hod_max_sections,
-            high_exp_threshold=high_exp_threshold
+            high_exp_threshold=high_exp_threshold,
+            ta_df=ta_df,
+            tas_per_section=tas_per_section,
+            year_filter=year_filter
         )
 
         return JSONResponse(content=jsonable_encoder(sanitize_for_json({
@@ -375,19 +431,22 @@ async def run_allocation(
     weight_exp: float = Form(0.30),
     weight_skill: float = Form(0.20),
     weight_qual: float = Form(0.10),
+    tas_per_section: int = Form(2),
+    year_filter: Optional[str] = Form("All"),
     faculty_file: Optional[UploadFile] = File(None),
     pref_file: Optional[UploadFile] = File(None),
     exp_file: Optional[UploadFile] = File(None),
-    course_file: Optional[UploadFile] = File(None)
+    course_file: Optional[UploadFile] = File(None),
+    ta_file: Optional[UploadFile] = File(None)
 ):
     """
-    Runs full allocation pipeline: Validation -> Scoring -> OR-Tools Optimization -> Excel Export -> AI Explanation.
-    Accepts single combined faculty file or legacy split files.
+    Runs full allocation pipeline with Multi-Year Courses and Custom Teaching Assistants:
+    Validation -> Scoring -> OR-Tools CP-SAT Optimization -> Multi-Tab Excel Export -> AI Explanation.
     """
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
-        pref_src, exp_src, course_src = resolve_file_sources(faculty_file, pref_file, exp_file, course_file)
+        pref_src, exp_src, course_src, ta_src = resolve_file_sources(faculty_file, pref_file, exp_file, course_file, ta_file)
 
         custom_weights = {
             "preference": weight_pref,
@@ -410,7 +469,10 @@ async def run_allocation(
             hod_max_sections=hod_max_sections,
             high_exp_threshold=high_exp_threshold,
             weights=custom_weights,
-            output_excel_path=output_path
+            output_excel_path=output_path,
+            ta_file_source=ta_src,
+            tas_per_section=tas_per_section,
+            year_filter=year_filter
         )
 
         return JSONResponse(content=jsonable_encoder(sanitize_for_json(result)))

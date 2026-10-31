@@ -121,6 +121,30 @@
                                 <input type="number" id="highExpThreshold" value="8" min="1" max="30" step="0.5" required title="Min teaching experience in a course to trigger 2+1 section split">
                             </div>
                         </div>
+
+                        <!-- Teaching Assistants Count Configuration -->
+                        <div class="form-group">
+                            <label for="numTAsPerSection">TAs per Section (K)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-user-graduate"></i>
+                                <input type="number" id="numTAsPerSection" value="2" min="0" max="10" required title="Custom count of Teaching Assistants to allocate under faculty per section">
+                            </div>
+                        </div>
+
+                        <!-- Multi-Year Academic Year Filter -->
+                        <div class="form-group">
+                            <label for="filterAcademicYear">Academic Year Scope</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-graduation-cap"></i>
+                                <select id="filterAcademicYear" style="background: rgba(30, 41, 59, 0.8); border: 1px solid var(--card-border); color: #cbd5e1; border-radius: 8px; padding: 10px 14px; width: 100%; font-size: 13px; outline: none; cursor: pointer;">
+                                    <option value="All">All Academic Years</option>
+                                    <option value="I Year">I Year B.Tech</option>
+                                    <option value="II Year">II Year B.Tech</option>
+                                    <option value="III Year">III Year B.Tech</option>
+                                    <option value="M.Tech I Year">M.Tech I Year</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Workload Target Guidelines Box -->
@@ -252,9 +276,26 @@
                                     <strong style="font-size: 13px;">Course Curriculum (L-T-P-C) <small style="color: #94a3b8; font-weight: normal;">(Optional)</small></strong>
                                     <span>Drag & drop or <button type="button" class="btn btn-xs btn-outline-primary" onclick="document.getElementById('fileCourse').click();">Browse</button></span>
                                     <div class="file-status-row">
-                                        <small id="nameCourse" class="file-name" style="color: #64748b;">Default: course_details.xlsx</small>
+                                        <small id="nameCourse" class="file-name" style="color: #64748b;">Default: courses_multiyear.xlsx</small>
                                         <button type="button" class="btn-dz-view" id="btnViewCourseFile" title="View loaded curriculum"><i class="fa-solid fa-eye"></i> View</button>
                                         <button type="button" class="btn-dz-clear hidden" id="btnClearCourseFile" title="Reset"><i class="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Teaching Assistants Dropzone (Optional) -->
+                        <div class="dropzone dropzone-optional" id="dropzoneTA" style="margin-top: 8px;">
+                            <input type="file" id="fileTA" accept=".xlsx, .xls" hidden>
+                            <div class="dropzone-content">
+                                <i class="fa-solid fa-user-graduate drop-icon" style="color: #a855f7; font-size: 22px;"></i>
+                                <div class="drop-text">
+                                    <strong style="font-size: 13px;">Teaching Assistants (TAs) Roster <small style="color: #94a3b8; font-weight: normal;">(Optional)</small></strong>
+                                    <span>Drag & drop or <button type="button" class="btn btn-xs btn-outline-primary" onclick="document.getElementById('fileTA').click();">Browse</button></span>
+                                    <div class="file-status-row">
+                                        <small id="nameTA" class="file-name" style="color: #a855f7;">Default: teaching_assistants.xlsx</small>
+                                        <button type="button" class="btn-dz-view" id="btnViewTAFile" title="View loaded TAs"><i class="fa-solid fa-eye"></i> View</button>
+                                        <button type="button" class="btn-dz-clear hidden" id="btnClearTAFile" title="Reset"><i class="fa-solid fa-xmark"></i></button>
                                     </div>
                                 </div>
                             </div>
@@ -340,6 +381,7 @@
                         <button class="tab-btn" data-tab="tabWorkload"><i class="fa-solid fa-calculator"></i> LTPC Workload & Dept Analysis</button>
                         <button class="tab-btn" data-tab="tabAnalytics"><i class="fa-solid fa-chart-pie"></i> Visual Analytics & Charts</button>
                         <button class="tab-btn" data-tab="tabFaculty"><i class="fa-solid fa-user-group"></i> Faculty Detail View</button>
+                        <button class="tab-btn" data-tab="tabTAs"><i class="fa-solid fa-user-graduate"></i> Teaching Assistants (TAs)</button>
                         <button class="tab-btn" data-tab="tabAgent"><i class="fa-solid fa-robot"></i> AI Agent Explanation</button>
                         <button class="tab-btn" data-tab="tabTrace"><i class="fa-solid fa-list-check"></i> Execution Steps</button>
                     </div>
@@ -745,6 +787,13 @@
                             </div>
                         </div>
 
+                        <!-- Tab 4: Teaching Assistants Detail View -->
+                        <div class="tab-pane" id="tabTAs">
+                            <div class="table-wrapper" id="tasTableContainer">
+                                <!-- Dynamic Table Inserted by JS -->
+                            </div>
+                        </div>
+
                         <!-- Tab 4: AI Agent Explanation & Live Interactive Assistant -->
                         <div class="tab-pane" id="tabAgent">
                             <div class="ai-agent-layout" style="display: flex; flex-direction: column; gap: 20px;">
@@ -929,6 +978,7 @@
                     <div class="preview-tab-btn-group">
                         <button class="preview-tab-btn active" data-preview="previewFaculty"><i class="fa-solid fa-user-group"></i> Faculty Roster & Preferences</button>
                         <button class="preview-tab-btn" data-preview="previewCourse"><i class="fa-solid fa-book-bookmark"></i> Course Curriculum (L-T-P-C)</button>
+                        <button class="preview-tab-btn" data-preview="previewTA"><i class="fa-solid fa-user-graduate"></i> Teaching Assistants (TAs)</button>
                         <button class="preview-tab-btn" data-preview="previewCharts"><i class="fa-solid fa-chart-pie"></i> Visual Charts & Insights</button>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; flex: 1; justify-content: flex-end;">
@@ -957,6 +1007,11 @@
                     <div class="preview-pane" id="previewCourse">
                         <div class="table-wrapper" id="previewCourseContainer" style="max-height: 480px; overflow-y: auto;">
                             <p class="preview-placeholder">Loading course details preview...</p>
+                        </div>
+                    </div>
+                    <div class="preview-pane" id="previewTA">
+                        <div class="table-wrapper" id="previewTAContainer" style="max-height: 480px; overflow-y: auto;">
+                            <p class="preview-placeholder">Loading teaching assistants preview...</p>
                         </div>
                     </div>
                     <div class="preview-pane" id="previewCharts">

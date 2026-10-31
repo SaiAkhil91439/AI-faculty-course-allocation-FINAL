@@ -1,5 +1,6 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import pandas as pd
+from backend.excel_reader import clean_subject_name
 
 class AllocationValidationError(Exception):
     def __init__(self, message: str, details: List[str] = None):
@@ -17,10 +18,14 @@ def validate_inputs(
     course_df: pd.DataFrame = None,
     dean_max_sections: int = 2,
     hod_max_sections: int = 3,
-    high_exp_threshold: float = 8.0
+    high_exp_threshold: float = 8.0,
+    ta_df: Optional[pd.DataFrame] = None,
+    tas_per_section: int = 2,
+    year_filter: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Validates user configurations, roles (Dean/HOD), course L-T-P-C data, and loaded DataFrames.
+    Validates user configurations, roles (Dean/HOD), multi-year course L-T-P-C data,
+    Teaching Assistants (TA) settings, and loaded DataFrames.
     """
     errors = []
 
@@ -45,6 +50,8 @@ def validate_inputs(
         errors.append("Dean max sections must be at least 1.")
     if hod_max_sections <= 0:
         errors.append("HOD max sections must be at least 1.")
+    if tas_per_section < 0:
+        errors.append("Teaching Assistants per section cannot be negative.")
 
     # 2. Check Preferences DataFrame
     if pref_df.empty:
@@ -64,18 +71,28 @@ def validate_inputs(
     deans_count = int((pref_df["Role"] == "Dean").sum()) if "Role" in pref_df.columns else 0
     hods_count = int((pref_df["Role"] == "HOD").sum()) if "Role" in pref_df.columns else 0
 
-    # Count high-experience faculty (max teaching experience in any course >= high_exp_threshold)
     high_exp_count = 0
     if not exp_df.empty and "Experience_Years" in exp_df.columns:
         fac_max_exps = exp_df.groupby("Faculty_ID")["Experience_Years"].max()
         high_exp_count = int((fac_max_exps >= high_exp_threshold).sum())
 
-    # 5. Extract available subjects
-    exp_subjects = set(exp_df["Subject"].dropna().unique())
+    # 5. Extract available subjects & Multi-Year Courses
+    years_available = []
+    if course_df is not None and not course_df.empty and "Year" in course_df.columns:
+        years_available = [y for y in course_df["Year"].dropna().unique() if str(y).strip() != ""]
+
+    target_course_df = course_df
+    if year_filter and year_filter not in ("All", "all", "", None) and target_course_df is not None and not target_course_df.empty:
+        filtered = target_course_df[target_course_df["Year"] == year_filter]
+        if not filtered.empty:
+            target_course_df = filtered
+
+    exp_subjects = set(exp_df["Subject"].dropna().apply(clean_subject_name).unique())
     pref_cols = [c for c in pref_df.columns if c.startswith("Preference_")]
     pref_subjects = set()
     for col in pref_cols:
-        pref_subjects.update(pref_df[col].dropna().unique())
+        for val in pref_df[col].dropna():
+            pref_subjects.add(clean_subject_name(val))
     
     all_known_subjects = sorted(list(exp_subjects.union(pref_subjects)))
 
@@ -86,8 +103,11 @@ def validate_inputs(
 
     # 6. Check qualified faculty count per subject
     subject_faculty_counts = {}
+    exp_copy = exp_df.copy()
+    exp_copy["Clean_Subj"] = exp_copy["Subject"].apply(clean_subject_name)
+
     for subj in exp_subjects:
-        subj_exp = exp_df[exp_df["Subject"] == subj]
+        subj_exp = exp_copy[exp_copy["Clean_Subj"] == subj]
         qualified_fac = subj_exp["Faculty_ID"].nunique()
         subject_faculty_counts[subj] = qualified_fac
 
@@ -107,8 +127,13 @@ def validate_inputs(
 
     # 7. Check Course Details L-T-P-C Data
     courses_loaded = 0
-    if course_df is not None and not course_df.empty:
-        courses_loaded = len(course_df)
+    if target_course_df is not None and not target_course_df.empty:
+        courses_loaded = len(target_course_df)
+
+    # 8. Check Teaching Assistants Data
+    ta_count = 0
+    if ta_df is not None and not ta_df.empty:
+        ta_count = len(ta_df)
 
     if errors:
         raise AllocationValidationError(
@@ -132,6 +157,9 @@ def validate_inputs(
         "hods_count": hods_count,
         "courses_loaded": courses_loaded,
         "available_subjects": active_subjects,
-        "subject_faculty_counts": subject_faculty_counts
+        "subject_faculty_counts": subject_faculty_counts,
+        "tas_per_section": tas_per_section,
+        "ta_count": ta_count,
+        "years_available": years_available,
+        "year_filter": year_filter or "All"
     }
-

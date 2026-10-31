@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const hodMaxSectionsInput = document.getElementById('hodMaxSections');
     const highExpThresholdInput = document.getElementById('highExpThreshold');
     const lblExpThreshold = document.getElementById('lblExpThreshold');
+    const numTAsPerSectionInput = document.getElementById('numTAsPerSection');
+    const filterAcademicYearInput = document.getElementById('filterAcademicYear');
 
     if (highExpThresholdInput && lblExpThreshold) {
         highExpThresholdInput.addEventListener('input', () => {
@@ -34,14 +36,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileFaculty = document.getElementById('fileFaculty');
     const filePref = document.getElementById('filePref');
     const fileExp = document.getElementById('fileExp');
+    const fileTA = document.getElementById('fileTA');
     const nameCourse = document.getElementById('nameCourse');
     const nameFaculty = document.getElementById('nameFaculty');
     const namePref = document.getElementById('namePref');
     const nameExp = document.getElementById('nameExp');
+    const nameTA = document.getElementById('nameTA');
     const dropzoneCourse = document.getElementById('dropzoneCourse');
     const dropzoneFaculty = document.getElementById('dropzoneFaculty');
     const dropzonePref = document.getElementById('dropzonePref');
     const dropzoneExp = document.getElementById('dropzoneExp');
+    const dropzoneTA = document.getElementById('dropzoneTA');
 
     // Upload Mode Elements & Dropzone Controls
     const btnModeCombined = document.getElementById('btnModeCombined');
@@ -53,9 +58,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClearPrefFile = document.getElementById('btnClearPrefFile');
     const btnClearExpFile = document.getElementById('btnClearExpFile');
     const btnClearCourseFile = document.getElementById('btnClearCourseFile');
+    const btnClearTAFile = document.getElementById('btnClearTAFile');
 
     const btnViewFacultyFile = document.getElementById('btnViewFacultyFile');
     const btnViewCourseFile = document.getElementById('btnViewCourseFile');
+    const btnViewTAFile = document.getElementById('btnViewTAFile');
     const btnHeaderViewData = document.getElementById('btnHeaderViewData');
     const btnHeaderChat = document.getElementById('btnHeaderChat');
     const btnBannerViewCharts = document.getElementById('btnBannerViewCharts');
@@ -111,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tab Containers
     const matrixTableContainer = document.getElementById('matrixTableContainer');
     const facultyTableContainer = document.getElementById('facultyTableContainer');
+    const tasTableContainer = document.getElementById('tasTableContainer');
     const aiExplanationContent = document.getElementById('aiExplanationContent');
     const traceTimeline = document.getElementById('traceTimeline');
 
@@ -236,7 +244,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setupDropzone(dropzoneFaculty, fileFaculty, nameFaculty, btnClearFacultyFile, 'Default: faculty_sample_combined.xlsx');
-    setupDropzone(dropzoneCourse, fileCourse, nameCourse, btnClearCourseFile, 'Default: course_details.xlsx');
+    setupDropzone(dropzoneCourse, fileCourse, nameCourse, btnClearCourseFile, 'Default: courses_multiyear.xlsx');
+    if (dropzoneTA) setupDropzone(dropzoneTA, fileTA, nameTA, btnClearTAFile, 'Default: teaching_assistants.xlsx');
     if (dropzonePref) setupDropzone(dropzonePref, filePref, namePref, btnClearPrefFile, 'Default: faculty_preferences.xlsx');
     if (dropzoneExp) setupDropzone(dropzoneExp, fileExp, nameExp, btnClearExpFile, 'Default: faculty_experience.xlsx');
 
@@ -256,6 +265,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (fileCourse && fileCourse.files && fileCourse.files.length > 0) {
             formData.append('course_file', fileCourse.files[0]);
+        }
+        if (fileTA && fileTA.files && fileTA.files.length > 0) {
+            formData.append('ta_file', fileTA.files[0]);
         }
     }
 
@@ -320,6 +332,8 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('dean_max_sections', deanMaxSectionsInput.value);
         formData.append('hod_max_sections', hodMaxSectionsInput.value);
         if (highExpThresholdInput) formData.append('high_exp_threshold', highExpThresholdInput.value);
+        if (numTAsPerSectionInput) formData.append('tas_per_section', numTAsPerSectionInput.value);
+        if (filterAcademicYearInput) formData.append('year_filter', filterAcademicYearInput.value);
 
         // Attach faculty & course files based on active mode
         appendFacultyFilesToForm(formData);
@@ -358,6 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('dean_max_sections', deanMaxSectionsInput.value);
         formData.append('hod_max_sections', hodMaxSectionsInput.value);
         if (highExpThresholdInput) formData.append('high_exp_threshold', highExpThresholdInput.value);
+        if (numTAsPerSectionInput) formData.append('tas_per_section', numTAsPerSectionInput.value);
+        if (filterAcademicYearInput) formData.append('year_filter', filterAcademicYearInput.value);
 
         const totalW = parseInt(weightPref.value) + parseInt(weightExp.value) + parseInt(weightSkill.value) + parseInt(weightQual.value);
         formData.append('weight_pref', parseFloat(weightPref.value) / (totalW || 100));
@@ -450,9 +466,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let matrixHtml = '<table><thead><tr><th>Section</th>';
         subjects.forEach(s => {
-            const ltpc = allocData.course_details && allocData.course_details[s] ? allocData.course_details[s]['L-T-P-C'] : '';
-            const hrs = allocData.course_details && allocData.course_details[s] ? allocData.course_details[s]['Total_Hours'] : 5;
-            matrixHtml += `<th>${s}<br/><small style="color:#38bdf8; font-weight:600;">[${ltpc}] (${hrs}h)</small></th>`;
+            const cDetail = (allocData.course_details && allocData.course_details[s]) || {};
+            const ltpc = cDetail['L-T-P-C'] || '';
+            const hrs = cDetail.Total_Hours || 5;
+            const cYear = cDetail.Year ? `<span class="badge badge-info" style="background:#4f46e5; font-size:10px; margin-bottom:2px;">${cDetail.Year}</span><br/>` : '';
+            const cCode = cDetail.Course_Code ? `<small style="color:#94a3b8;">(${cDetail.Course_Code})</small> ` : '';
+            const sTitle = cDetail.Subject || s;
+            matrixHtml += `<th>${cYear}${cCode}<strong>${sTitle}</strong><br/><small style="color:#38bdf8; font-weight:600;">[${ltpc}] (${hrs}h)</small></th>`;
         });
         matrixHtml += '</tr></thead><tbody>';
 
@@ -462,10 +482,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cellObj = matrix[sec] ? matrix[sec][s] : null;
                 if (typeof cellObj === 'object' && cellObj !== null) {
                     const lBadge = getRoleBadge(cellObj.Lecture_Faculty);
+                    const hasTAs = (cellObj.Teaching_Assistants && cellObj.Teaching_Assistants.length > 0);
+                    const taStr = cellObj.Teaching_Assistants_Str || (cellObj.Teaching_Assistants ? cellObj.Teaching_Assistants.join(', ') : '');
+
                     matrixHtml += `<td class="td-highlight">
                         <strong style="color:#f8fafc;"><i class="fa-solid fa-chalkboard-user" style="color:#38bdf8;"></i> L:</strong> ${cellObj.Lecture_Faculty} ${lBadge}<br/>
+                        ${hasTAs ? `<small style="color: #c084fc; font-weight: 500;"><i class="fa-solid fa-user-graduate"></i> TAs (${cellObj.Teaching_Assistants.length}): ${taStr}</small>` : `
                         <small style="color: #94a3b8;">T/P 1: ${cellObj.TP_Faculty_1}</small><br/>
-                        <small style="color: #94a3b8;">T/P 2: ${cellObj.TP_Faculty_2}</small>
+                        <small style="color: #94a3b8;">T/P 2: ${cellObj.TP_Faculty_2}</small>`}
                     </td>`;
                 } else {
                     matrixHtml += `<td class="td-highlight">${cellObj || 'N/A'}</td>`;
@@ -480,14 +504,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let facHtml = `<table>
             <thead>
                 <tr>
-                    <th>Subject & L-T-P-C</th>
+                    <th>Academic Year</th>
+                    <th>Course & L-T-P-C</th>
                     <th>Sections</th>
                     <th>Lecture (L) Faculty</th>
                     <th>Designation & Role</th>
-                    <th>Course Teaching Exp</th>
+                    <th>Course Exp</th>
                     <th>Teaching Workload (hrs/wk)</th>
-                    <th>T/P Faculty 1</th>
-                    <th>T/P Faculty 2</th>
+                    <th>Assigned TAs / T-P Faculty</th>
                     <th>Pref Rank</th>
                     <th>Score</th>
                 </tr>
@@ -499,10 +523,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const isHighExp = row.Is_High_Experience_Split;
             const roleBadge = isDeanOrHod ? `<span class="badge badge-info" style="background:#059669; color:white;">${row.Lecture_Role}</span>` : `<span class="badge badge-info">${row.Lecture_Role}</span>`;
             const expBadge = isHighExp ? `<br/><small style="color: #f59e0b; font-weight: bold;"><i class="fa-solid fa-star"></i> High-Exp Split (${row.Num_Sections} Secs)</small>` : '';
+            const yrBadge = row.Year ? `<span class="badge badge-info" style="background:#4f46e5; font-size:11px;">${row.Year}</span>` : '<span style="color:#94a3b8;">-</span>';
+            const codeStr = row.Course_Code ? `<small style="color:#94a3b8;">(${row.Course_Code})</small>` : '';
+            const hasTAs = (row.Teaching_Assistants && row.Teaching_Assistants.length > 0);
+            const taDisplay = hasTAs ? `<span style="color:#c084fc; font-weight:600;"><i class="fa-solid fa-user-graduate"></i> ${row.Teaching_Assistants_Str}</span>` : `<small style="color:#94a3b8;">${row.TP_Faculty_1_Name}, ${row.TP_Faculty_2_Name}</small>`;
 
             facHtml += `<tr ${isHighExp ? 'style="background: rgba(245, 158, 11, 0.08);"' : (isDeanOrHod ? 'style="background: rgba(16, 185, 129, 0.08);"' : '')}>
+                <td>${yrBadge}</td>
                 <td>
-                    <span class="badge badge-info">${row.Subject}</span><br/>
+                    <span class="badge badge-info">${row.Subject}</span> ${codeStr}<br/>
                     <small style="color:#38bdf8; font-weight:600;">L-T-P-C: ${row['L-T-P-C'] || '3-0-2-4'} (${row.Total_Course_Hours || 5} hrs/sec)</small>
                 </td>
                 <td class="td-bold" style="color: #38bdf8;">${row.Sections}</td>
@@ -513,14 +542,89 @@ document.addEventListener('DOMContentLoaded', () => {
                     <strong style="color: #34d399;">${row.Assigned_Weekly_Hours} hrs/wk</strong><br/>
                     <small style="color: #94a3b8;">Target: ${row.Target_Hours_Range}</small>
                 </td>
-                <td>${row.TP_Faculty_1_Name}</td>
-                <td>${row.TP_Faculty_2_Name}</td>
+                <td>${taDisplay}</td>
                 <td><span class="badge-rank">Rank ${row.Preference_Rank}</span></td>
                 <td><span class="badge-score">${row.Score}</span></td>
             </tr>`;
         });
         facHtml += '</tbody></table>';
         facultyTableContainer.innerHTML = facHtml;
+
+        // 3. Teaching Assistants (TAs) View Table
+        if (tasTableContainer) {
+            if (allocData.ta_allocations && allocData.ta_allocations.length > 0) {
+                let taHtml = `<div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <h4 style="margin: 0; color: #f8fafc;"><i class="fa-solid fa-user-graduate" style="color: #c084fc;"></i> Section-wise Teaching Assistants (TAs) Allocation</h4>
+                    <span class="badge badge-info" style="background: rgba(192, 132, 252, 0.2); color: #c084fc; border: 1px solid #c084fc;">
+                        ${allocData.tas_per_section || 1} TA(s) Allocated Per Section Under Lecture Faculty
+                    </span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 45px;">#</th>
+                            <th>Section</th>
+                            <th>Academic Year</th>
+                            <th>Course & Code</th>
+                            <th>Assigned Teaching Assistant</th>
+                            <th>Supervising Lecture Faculty</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+                allocData.ta_allocations.forEach((taRow, idx) => {
+                    const yrBadge = taRow.Year ? `<span class="badge badge-info" style="background:#4f46e5; font-size:11px;">${taRow.Year}</span>` : '';
+                    const code = taRow.Course_Code ? `<small style="color:#94a3b8;">(${taRow.Course_Code})</small>` : '';
+                    taHtml += `<tr>
+                        <td style="color:#94a3b8; text-align:center;">${idx + 1}</td>
+                        <td class="td-bold" style="color:#38bdf8;">${taRow.Section}</td>
+                        <td>${yrBadge}</td>
+                        <td class="td-bold">${taRow.Subject} ${code}</td>
+                        <td><strong style="color:#c084fc;"><i class="fa-solid fa-user-graduate"></i> ${taRow.TA_Name}</strong> <small style="color:#94a3b8;">(${taRow.TA_ID})</small></td>
+                        <td><strong style="color:#f8fafc;"><i class="fa-solid fa-chalkboard-user" style="color:#38bdf8;"></i> ${taRow.Supervising_Faculty_Name}</strong></td>
+                        <td><span class="badge-score">${taRow.Score || 100}</span></td>
+                    </tr>`;
+                });
+                taHtml += '</tbody></table>';
+
+                // TA Workload Summary sub-table
+                if (allocData.ta_workload_summary && allocData.ta_workload_summary.length > 0) {
+                    taHtml += `<div style="margin-top: 24px; margin-bottom: 12px;">
+                        <h4 style="margin: 0; color: #f8fafc;"><i class="fa-solid fa-chart-bar" style="color: #38bdf8;"></i> Teaching Assistant Workload & Supervision Summary</h4>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 45px;">#</th>
+                                <th>TA Name & ID</th>
+                                <th style="text-align:center;">Total Sections Assigned</th>
+                                <th>Assigned Courses</th>
+                                <th>Supervising Faculty</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                    allocData.ta_workload_summary.forEach((ts, idx) => {
+                        taHtml += `<tr>
+                            <td style="color:#94a3b8; text-align:center;">${idx + 1}</td>
+                            <td class="td-bold" style="color:#c084fc;">${ts.TA_Name} <small style="color:#94a3b8;">(${ts.TA_ID})</small></td>
+                            <td style="text-align:center; font-weight:700; color:#38bdf8;">${ts.Total_Sections} Sections</td>
+                            <td>${ts.Assigned_Courses.join(', ') || 'N/A'}</td>
+                            <td>${ts.Supervising_Faculty.join(', ') || 'N/A'}</td>
+                        </tr>`;
+                    });
+                    taHtml += '</tbody></table>';
+                }
+
+                tasTableContainer.innerHTML = taHtml;
+            } else {
+                tasTableContainer.innerHTML = `<div style="text-align:center; padding: 40px; color:#94a3b8;">
+                    <i class="fa-solid fa-user-graduate" style="font-size:36px; margin-bottom:12px; color:#64748b;"></i>
+                    <h4>No Teaching Assistants Allocated</h4>
+                    <p>Set "TAs per Section (K)" &ge; 1 to allocate Teaching Assistants under course lecture faculty.</p>
+                </div>`;
+            }
+        }
 
         // 3. AI Explanation
         aiExplanationContent.innerHTML = data.ai_explanation;
@@ -863,6 +967,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (facContainer) facContainer.innerHTML = '<p class="preview-placeholder"><i class="fa-solid fa-spinner fa-spin"></i> Loading faculty roster & preferences preview...</p>';
         if (courseContainer) courseContainer.innerHTML = '<p class="preview-placeholder"><i class="fa-solid fa-spinner fa-spin"></i> Loading course curriculum preview...</p>';
+        const taContainerInit = document.getElementById('previewTAContainer');
+        if (taContainerInit) taContainerInit.innerHTML = '<p class="preview-placeholder"><i class="fa-solid fa-spinner fa-spin"></i> Loading teaching assistants preview...</p>';
 
         try {
             const formData = new FormData();
@@ -887,6 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetFacultyInput = currentUploadMode === 'combined' ? 'fileFaculty' : 'filePref';
         await loadExcelPreview(targetFacultyInput, 'previewFacultyContainer', 'Faculty Input');
         await loadExcelPreview('fileCourse', 'previewCourseContainer', 'Course Details');
+        await loadExcelPreview('fileTA', 'previewTAContainer', 'Teaching Assistants');
     }
 
     function renderDataExplorer(data) {
@@ -895,14 +1002,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const roleFilter = (previewRoleFilter ? previewRoleFilter.value : '').trim();
         const facContainer = document.getElementById('previewFacultyContainer');
         const courseContainer = document.getElementById('previewCourseContainer');
+        const taContainer = document.getElementById('previewTAContainer');
         const statsBar = document.getElementById('previewStatsBar');
 
         // Render Stats Bar
         if (statsBar && data.faculty && data.courses) {
             const f = data.faculty;
             const c = data.courses;
+            const taCount = (data.tas && data.tas.total_count) ? data.tas.total_count : 0;
             statsBar.innerHTML = `
                 <div class="preview-stat-chip"><i class="fa-solid fa-users" style="color:#38bdf8;"></i> Total Faculty: <strong>${f.total_count}</strong></div>
+                <div class="preview-stat-chip"><i class="fa-solid fa-user-graduate" style="color:#c084fc;"></i> Total TAs: <strong>${taCount}</strong></div>
                 <div class="preview-stat-chip"><i class="fa-solid fa-user-tie" style="color:#10b981;"></i> Deans: <strong>${f.role_counts['Dean'] || 0}</strong></div>
                 <div class="preview-stat-chip"><i class="fa-solid fa-user-shield" style="color:#a855f7;"></i> HODs: <strong>${f.role_counts['HOD'] || 0}</strong></div>
                 <div class="preview-stat-chip"><i class="fa-solid fa-graduation-cap" style="color:#3b82f6;"></i> Professors: <strong>${(f.role_counts['Professor'] || 0) + (f.role_counts['Associate Professor'] || 0) + (f.role_counts['Assistant Professor'] || 0)}</strong></div>
@@ -1016,6 +1126,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
             html += `</tbody></table>`;
             courseContainer.innerHTML = html;
+        }
+
+        // Render Teaching Assistants Table
+        if (taContainer && data.tas) {
+            let filteredTAs = data.tas.records || [];
+            if (query) {
+                filteredTAs = filteredTAs.filter(t => 
+                    (t.TA_Name && t.TA_Name.toLowerCase().includes(query)) ||
+                    (t.TA_ID && t.TA_ID.toLowerCase().includes(query)) ||
+                    (t.Designation && t.Designation.toLowerCase().includes(query)) ||
+                    (t.Department && t.Department.toLowerCase().includes(query)) ||
+                    (t.Preferences && t.Preferences.toLowerCase().includes(query))
+                );
+            }
+
+            let html = `<table>
+                <thead>
+                    <tr>
+                        <th style="width: 45px;">#</th>
+                        <th>TA Name</th>
+                        <th>TA ID</th>
+                        <th>Designation</th>
+                        <th>Department</th>
+                        <th>Course Preferences</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            filteredTAs.forEach((t, idx) => {
+                html += `<tr>
+                    <td style="color:#94a3b8; text-align:center;">${idx + 1}</td>
+                    <td class="td-bold" style="color:#c084fc;"><i class="fa-solid fa-user-graduate"></i> ${t.TA_Name}</td>
+                    <td><span class="badge badge-info">${t.TA_ID}</span></td>
+                    <td>${t.Designation}</td>
+                    <td>${t.Department || 'CSE'}</td>
+                    <td style="font-size:12px; color:#cbd5e1;">${t.Preferences}</td>
+                </tr>`;
+            });
+
+            if (filteredTAs.length === 0) {
+                html += `<tr><td colspan="6" style="text-align:center; padding:20px; color:#94a3b8;">No teaching assistants match "${query}".</td></tr>`;
+            }
+
+            html += `</tbody></table>`;
+            taContainer.innerHTML = html;
         }
     }
 
@@ -1146,6 +1301,13 @@ document.addEventListener('DOMContentLoaded', () => {
         btnViewCourseFile.addEventListener('click', (e) => {
             e.stopPropagation();
             openDataExplorer('previewCourse');
+        });
+    }
+
+    if (btnViewTAFile) {
+        btnViewTAFile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDataExplorer('previewTA');
         });
     }
 
