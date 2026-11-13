@@ -112,8 +112,15 @@ def read_course_details(file_source: Union[str, BinaryIO]) -> pd.DataFrame:
             sub_records = _parse_course_dataframe(df_sheet, default_year=s_name)
             records.extend(sub_records)
     else:
-        # Single sheet or default reading
-        if sheet_names:
+        # Check if there is a dedicated course sheet
+        target_sheet = None
+        for s in sheet_names:
+            if any(k in s.lower() for k in ["course", "curriculum", "syllabus", "subject", "structure"]):
+                target_sheet = s
+                break
+        if target_sheet:
+            df = pd.read_excel(xl, sheet_name=target_sheet)
+        elif sheet_names:
             df = pd.read_excel(xl, sheet_name=sheet_names[0])
         else:
             df = pd.read_excel(file_source)
@@ -147,7 +154,66 @@ def read_course_details(file_source: Union[str, BinaryIO]) -> pd.DataFrame:
 
 def _parse_course_dataframe(df: pd.DataFrame, default_year: str = "General") -> List[Dict[str, Any]]:
     """Helper to extract course rows from a single DataFrame."""
+    if df is None or len(df.columns) == 0:
+        return []
+
     df.columns = [str(col).strip() for col in df.columns]
+
+    # Check if df has stacked year format (like institutional Course List sheet)
+    col_text = " ".join([str(c).lower() for c in df.columns])
+    first_vals_text = " ".join([str(v).lower() for v in df.iloc[:8].values.flatten() if pd.notna(v)])
+    
+    if any(k in col_text or k in first_vals_text for k in ["i year courses", "ii year courses", "iii year courses", "m.tech i year", "m.tech"]):
+        stacked_records = []
+        current_year = "I Year"
+        for idx, row in df.iterrows():
+            vals = [str(v).strip() for v in row.values if pd.notna(v) and str(v).strip()]
+            if not vals:
+                continue
+            row_text = " ".join(vals).lower()
+            if "m.tech" in row_text:
+                current_year = "M.Tech I Year"
+                continue
+            elif "iii year" in row_text:
+                current_year = "III Year"
+                continue
+            elif "ii year" in row_text:
+                current_year = "II Year"
+                continue
+            elif "i year" in row_text:
+                current_year = "I Year"
+                continue
+            elif "s.no" in row_text and "course" in row_text:
+                continue
+
+            ltpc = None
+            c_name = None
+            c_code = ""
+            for v in vals:
+                if any(c in v for c in ['-', '/']) and any(ch.isdigit() for ch in v):
+                    parts = [p.strip() for p in v.replace('/', '-').split('-') if p.strip().isdigit()]
+                    if len(parts) in (3, 4, 5):
+                        ltpc = v
+                        break
+            for v in vals:
+                if len(v) >= 5 and not v.isdigit() and v != ltpc and not any(k in v.lower() for k in ['s.no', 'year', 'course', 'l-t-p']):
+                    if any(ch.isalpha() for ch in v) and len(v.split()) > 1:
+                        c_name = v
+                    elif any(ch.isdigit() for ch in v) and any(ch.isalpha() for ch in v) and len(v) <= 10:
+                        c_code = v
+
+            if c_name and ltpc:
+                l_val, t_val, p_val, c_val = parse_ltpc_string(ltpc)
+                stacked_records.append({
+                    "Year": current_year,
+                    "Course_Code": c_code,
+                    "Subject": clean_subject_name(c_name),
+                    "L": l_val, "T": t_val, "P": p_val, "C": c_val,
+                    "L-T-P-C": f"{l_val}-{t_val}-{p_val}-{c_val}",
+                    "Total_Hours": l_val + t_val + p_val
+                })
+        if stacked_records:
+            return stacked_records
 
     course_col = None
     course_candidates = [
@@ -162,7 +228,10 @@ def _parse_course_dataframe(df: pd.DataFrame, default_year: str = "General") -> 
         if course_col:
             break
     if not course_col:
-        course_col = df.columns[0]
+        course_col = df.columns[0] if len(df.columns) > 0 else None
+
+    if not course_col:
+        return []
 
     code_col = None
     for cand in ["Course Code", "Course_Code", "Code", "CourseCode"]:
@@ -275,6 +344,9 @@ def read_teaching_assistants(file_source: Union[str, BinaryIO]) -> pd.DataFrame:
     except Exception:
         df = pd.read_excel(file_source)
 
+    if df is None or len(df.columns) == 0:
+        return pd.DataFrame(columns=["TA_ID", "TA_Name", "Role"])
+
     df.columns = [str(col).strip() for col in df.columns]
 
     # Find name column
@@ -292,7 +364,10 @@ def read_teaching_assistants(file_source: Union[str, BinaryIO]) -> pd.DataFrame:
                 name_col = c
                 break
     if not name_col:
-        name_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+        name_col = df.columns[1] if len(df.columns) > 1 else (df.columns[0] if len(df.columns) > 0 else None)
+
+    if not name_col:
+        return pd.DataFrame(columns=["TA_ID", "TA_Name", "Role"])
 
     # Find ID column
     id_col = None
@@ -376,7 +451,10 @@ def parse_wide_combined_sheet(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFr
                     break
 
     if not name_col:
-        name_col = df.columns[0]
+        name_col = df.columns[0] if len(df.columns) > 0 else None
+
+    if not name_col:
+        return pd.DataFrame(), pd.DataFrame()
 
     desig_col = None
     for c in ["Designation", "Role", "Position", "Title", "Post"]:

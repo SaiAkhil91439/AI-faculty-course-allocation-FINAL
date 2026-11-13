@@ -85,6 +85,21 @@ def resolve_file_sources(
     if target_fac:
         pref_src = target_fac.file
         exp_src = exp_file.file if has_exp else None
+
+        # Check if the uploaded workbook also contains Course or TA sheets
+        try:
+            if hasattr(target_fac.file, 'seek'):
+                target_fac.file.seek(0)
+            xl_check = pd.ExcelFile(target_fac.file)
+            sheets_low = [s.strip().lower() for s in xl_check.sheet_names]
+            if not has_course and any(k in s for s in sheets_low for k in ["course", "subject", "curriculum", "syllabus", "structure"]):
+                course_src = target_fac.file
+            if not has_ta and any(k in s for s in sheets_low for k in ["teaching assistant", "ta", "assistant"]):
+                ta_src = target_fac.file
+            if hasattr(target_fac.file, 'seek'):
+                target_fac.file.seek(0)
+        except Exception:
+            pass
     elif has_exp:
         comb_sample = os.path.join(UPLOAD_DIR, "faculty_sample_combined.xlsx")
         pref_src = comb_sample if os.path.exists(comb_sample) else os.path.join(UPLOAD_DIR, "faculty_preferences.xlsx")
@@ -411,6 +426,8 @@ async def validate_allocation_request(
             "details": e.details
         })))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(status_code=500, content=jsonable_encoder(sanitize_for_json({
             "success": False,
             "error_type": "SystemError",
@@ -487,6 +504,8 @@ async def run_allocation(
             "details": e.details
         })))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(status_code=500, content=jsonable_encoder(sanitize_for_json({
             "success": False,
             "error_type": "AllocationError",

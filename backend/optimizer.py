@@ -485,9 +485,15 @@ def solve_faculty_allocation(
         clean_s = c_info["Clean_Subject"]
 
         score_info = scores_df[(scores_df["Faculty_ID"] == f_id) & (scores_df["Subject"] == clean_s)]
-        pref_rank = score_info.iloc[0]["Preference_Rank"] if not score_info.empty else "N/A"
-        exp_years = score_info.iloc[0]["Experience_Years"] if not score_info.empty else 0.0
-        score_val = score_info.iloc[0]["Final_Score"] if not score_info.empty else score_matrix.get((f_id, clean_s), 0.0)
+        if not score_info.empty:
+            first_s = score_info.iloc[0]
+            pref_rank = first_s.get("Preference_Rank", "N/A")
+            exp_years = first_s.get("Experience_Years", 0.0)
+            score_val = first_s.get("Final_Score", score_matrix.get((f_id, clean_s), 0.0))
+        else:
+            pref_rank = "N/A"
+            exp_years = 0.0
+            score_val = score_matrix.get((f_id, clean_s), 0.0)
 
         total_score += score_val * num_secs
         assignment_count += num_secs
